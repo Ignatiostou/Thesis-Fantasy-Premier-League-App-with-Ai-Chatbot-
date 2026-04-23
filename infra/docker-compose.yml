@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: fantasy_fpl_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fantasy_fpl
+    ports:
+      - "5432:5432"
+    volumes:
+      - fantasy_fpl_pg:/var/lib/postgresql/data
+
+volumes:
+  fantasy_fpl_pg:

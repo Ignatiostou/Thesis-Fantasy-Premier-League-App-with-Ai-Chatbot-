@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600&display=swap');
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pa {
+  animation: fadeUp 0.4s both;
+}
+
+.pa2 {
+  animation: fadeUp 0.4s 0.06s both;
+}
+
+.pa3 {
+  animation: fadeUp 0.4s 0.1s both;
+}

@@ -1,0 +1,506 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ── SECTION 1: AUTH
+// ═════════════════════════════════════════════════════════════════════════════
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  username     String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  assistantProfile   UserAssistantProfile?
+  assistantSessions  AssistantSession[]
+  recommendationLogs RecommendationLog[]
+
+  sessions     Session[]
+  team         UserTeam?
+  leagues      LeagueMember[]
+  adminOf      League[]   @relation("LeagueAdmin")
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String   @unique
+  userAgent    String?
+  ip           String?
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ── SECTION 2: FPL DATA  (synced from the official FPL API — read-only)
+// ═════════════════════════════════════════════════════════════════════════════
+
+model FplTeam {
+  id        Int     @id
+  name      String
+  shortName String
+  code      Int?
+
+  players   FplPlayer[]
+  homeFix   FplFixture[] @relation("homeTeam")
+  awayFix   FplFixture[] @relation("awayTeam")
+  userPicks UserPick[]
+
+  @@map("fpl_teams")
+}
+
+model FplPlayer {
+  id         Int    @id
+  webName    String
+  firstName  String
+  secondName String
+
+  teamId   Int
+  position Int    // element_type: 1 GK, 2 DEF, 3 MID, 4 FWD
+  nowCost  Int    // e.g. 75 => £7.5m
+  status   String // a/d/i/s/u etc
+
+  chanceOfPlayingNextRound Int?
+  totalPoints              Int?
+  eventPoints              Int?
+  minutes                  Int?
+
+  goalsScored        Int?
+  assists            Int?
+  cleanSheets        Int?
+  bonus              Int?
+  selectedByPercent  Float?
+  form               Float?
+
+  raw Json?
+
+  team         FplTeam              @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  picks        UserPick[]
+  gwStats      PlayerGameweekStat[]
+  transfersIn  UserTransfer[]       @relation("transferIn")
+  transfersOut UserTransfer[]       @relation("transferOut")
+
+  @@index([teamId])
+  @@map("fpl_players")
+}
+
+model FplEvent {
+  id           Int       @id // gameweek id 1-38
+  name         String
+  deadlineTime DateTime?
+  finished     Boolean?
+  isCurrent    Boolean?
+  raw          Json?
+
+  picks       UserPick[]
+  transfers   UserTransfer[]
+  gwStates    UserGameweekState[]
+  gwScores    UserGameweekScore[]
+  playerStats PlayerGameweekStat[]
+  h2hMatches  H2HMatch[]
+
+  @@map("fpl_events")
+}
+
+model FplFixture {
+  id          Int       @id
+  event       Int?
+  kickoffTime DateTime?
+
+  teamHId         Int
+  teamAId         Int
+  teamHScore      Int?
+  teamAScore      Int?
+  teamHDifficulty Int?
+  teamADifficulty Int?
+
+  finished Boolean?
+  started  Boolean?
+
+  stats Json?
+  raw   Json?
+
+  teamH FplTeam @relation("homeTeam", fields: [teamHId], references: [id], onDelete: Restrict)
+  teamA FplTeam @relation("awayTeam", fields: [teamAId], references: [id], onDelete: Restrict)
+
+  @@index([event])
+  @@index([teamHId])
+  @@index([teamAId])
+  @@map("fpl_fixtures")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ── SECTION 3: MANAGER TEAM
+// ═════════════════════════════════════════════════════════════════════════════
+
+model UserTeam {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  name      String
+  budget    Int      @default(1000)
+  season    String   @default("2025-26")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  picks     UserPick[]
+  transfers UserTransfer[]
+  chips     UserChip[]
+  scores    UserGameweekScore[]
+  gwStates  UserGameweekState[]
+  leagues   LeagueMember[]
+
+  @@index([userId])
+  @@map("user_teams")
+}
+
+model UserPick {
+  id         String @id @default(cuid())
+  userTeamId String
+  playerId   Int
+  teamId     Int
+  gameweek   Int
+
+  position      Int
+  isCaptain     Boolean @default(false)
+  isViceCaptain Boolean @default(false)
+  isOnBench     Boolean @default(false)
+  benchOrder    Int?
+  buyPrice      Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userTeam UserTeam  @relation(fields: [userTeamId], references: [id], onDelete: Cascade)
+  player   FplPlayer @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  fplTeam  FplTeam   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  event    FplEvent  @relation(fields: [gameweek], references: [id], onDelete: Restrict)
+
+  @@unique([userTeamId, playerId, gameweek])
+  @@index([userTeamId, gameweek])
+  @@index([playerId])
+  @@map("user_picks")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ── SECTION 4: TRANSFERS
+// ═════════════════════════════════════════════════════════════════════════════
+
+model UserTransfer {
+  id            String   @id @default(cuid())
+  userTeamId    String
+  gameweek      Int
+  playerInId    Int
+  playerOutId   Int
+  playerInCost  Int
+  playerOutCost Int
+  isHit         Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  userTeam  UserTeam  @relation(fields: [userTeamId], references: [id], onDelete: Cascade)
+  playerIn  FplPlayer @relation("transferIn",  fields: [playerInId],  references: [id], onDelete: Restrict)
+  playerOut FplPlayer @relation("transferOut", fields: [playerOutId], references: [id], onDelete: Restrict)
+  event     FplEvent  @relation(fields: [gameweek], references: [id], onDelete: Restrict)
+
+  @@index([userTeamId, gameweek])
+  @@map("user_transfers")
+}
+
+model UserGameweekState {
+  id         String @id @default(cuid())
+  userTeamId String
+  gameweek   Int
+
+  freeTransfers Int     @default(1)
+  transfersMade Int     @default(0)
+  pointsHit     Int     @default(0)
+  activeChip    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userTeam UserTeam @relation(fields: [userTeamId], references: [id], onDelete: Cascade)
+  event    FplEvent @relation(fields: [gameweek],   references: [id], onDelete: Restrict)
+
+  @@unique([userTeamId, gameweek])
+  @@index([userTeamId, gameweek])
+  @@map("user_gw_states")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 5 — CHIPS
+// ═════════════════════════════════════════════════════════════════════════════
+
+enum ChipType {
+  WILDCARD
+  BENCH_BOOST
+  TRIPLE_CAPTAIN
+  FREE_HIT
+}
+
+model UserChip {
+  id         String   @id @default(cuid())
+  userTeamId String
+  chip       ChipType
+  gameweek   Int
+  playedAt   DateTime @default(now())
+
+  userTeam UserTeam @relation(fields: [userTeamId], references: [id], onDelete: Cascade)
+
+  @@index([userTeamId])
+  @@index([chip])
+  @@map("user_chips")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 6 — POINTS & SCORING
+// ═════════════════════════════════════════════════════════════════════════════
+
+model UserGameweekScore {
+  id         String @id @default(cuid())
+  userTeamId String
+  gameweek   Int
+
+  pointsBeforeHits    Int @default(0)
+  finalPoints         Int @default(0)
+  transferHits        Int @default(0)
+  pointsHit           Int @default(0)
+
+  captainPlayerId     Int?
+  viceCaptainPlayerId Int?
+  activeChip          String?
+  benchPoints         Int       @default(0)
+  rank                Int?
+  chipPlayed          ChipType?
+
+  autoSubsApplied Json?
+  breakdown       Json?
+
+  calculatedAt DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userTeam UserTeam @relation(fields: [userTeamId], references: [id], onDelete: Cascade)
+  event    FplEvent @relation(fields: [gameweek],   references: [id], onDelete: Cascade)
+
+  @@unique([userTeamId, gameweek])
+  @@index([userTeamId, gameweek])
+  @@map("user_gameweek_scores")
+}
+
+model PlayerGameweekStat {
+  id       String @id @default(cuid())
+  playerId Int
+  gameweek Int
+
+  minutes         Int     @default(0)
+  totalPoints     Int     @default(0)
+  goalsScored     Int     @default(0)
+  assists         Int     @default(0)
+  cleanSheets     Boolean @default(false)  
+  goalsConceded   Int     @default(0)
+  ownGoals        Int     @default(0)
+  penaltiesSaved  Int     @default(0)
+  penaltiesMissed Int     @default(0)
+  yellowCards     Int     @default(0)
+  redCards        Int     @default(0)
+  saves           Int     @default(0)
+  bonus           Int     @default(0)
+  bps             Int     @default(0)
+  influence       String?
+  creativity      String?
+  threat          String?
+  ictIndex        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  player FplPlayer @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  event  FplEvent  @relation(fields: [gameweek], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, gameweek])
+  @@index([gameweek])
+  @@index([playerId])
+  @@map("player_gameweek_stats")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 7 — LEAGUES
+// ═════════════════════════════════════════════════════════════════════════════
+
+enum LeagueType {
+  CLASSIC
+  HEAD_TO_HEAD
+}
+
+model League {
+  id         String     @id @default(cuid())
+  name       String
+  code       String     @unique
+  type       LeagueType @default(CLASSIC)
+
+  adminUserId String                          
+  maxMembers  Int        @default(20)
+  season      String     @default("2025-26")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  admin      User           @relation("LeagueAdmin", fields: [adminUserId], references: [id], onDelete: Restrict)  
+  members    LeagueMember[]
+  h2hMatches H2HMatch[]
+
+  @@index([adminUserId])
+  @@map("leagues")
+}
+
+model LeagueMember {
+  id         String   @id @default(cuid())
+  leagueId   String
+  userId     String
+  userTeamId String
+  joinedAt   DateTime @default(now())
+
+  league   League   @relation(fields: [leagueId],   references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId],     references: [id], onDelete: Cascade)
+  userTeam UserTeam @relation(fields: [userTeamId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, userId])
+  @@unique([leagueId, userTeamId])  
+  @@index([leagueId])
+  @@index([userId])
+  @@index([userTeamId])
+  @@map("league_members")
+}
+
+model H2HMatch {
+  id         String  @id @default(cuid())
+  leagueId   String
+  gameweek   Int
+  homeUserId String
+  awayUserId String
+  homePts    Int     @default(0)
+  awayPts    Int     @default(0)
+  winnerId   String?
+
+  league League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  event  FplEvent @relation(fields: [gameweek], references: [id], onDelete: Restrict)
+
+  @@unique([leagueId, gameweek, homeUserId, awayUserId])
+  @@index([leagueId, gameweek])
+  @@map("h2h_matches")
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 8 — CHATBOT_ASSISTANT
+// ═════════════════════════════════════════════════════════════════════════════
+
+
+enum AssistantSessionStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AssistantMessageRole {
+  SYSTEM
+  USER
+  ASSISTANT
+}
+
+enum AssistantIntent {
+  GENERAL_HELP
+  ONBOARDING
+  INITIAL_SQUAD
+  TRANSFER_ADVICE
+  TRANSFER_EVALUATION
+  CAPTAINCY
+  BENCH_ORDER
+  FORMATION_ADVICE
+  CHIP_ADVICE
+  PLAYER_COMPARISON
+}
+
+model UserAssistantProfile {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+
+  riskTolerance          Int      @default(2) // 1=low, 2=medium, 3=high
+  budgetStyle            Int      @default(2) // 1=value, 2=balanced, 3=premium
+  preferredFocus         Int      @default(2) // 1=defence, 2=midfield, 3=attack
+  differentialPreference Int      @default(2) // 1=safe, 2=balanced, 3=differentials
+  planningHorizon        Int      @default(2) // 1=short-term, 2=balanced, 3=long-term
+  explanationDepth       Int      @default(2) // 1=short, 2=medium, 3=detailed
+
+  onboardingCompleted   Boolean   @default(false)
+  onboardingStep        Int       @default(0)
+  onboardingVersion     Int       @default(1)
+
+  favoriteTeams          Json?
+  notes                  String?
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AssistantSession {
+  id          String                 @id @default(cuid())
+  userId      String
+  title       String?
+  status      AssistantSessionStatus @default(ACTIVE)
+
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    AssistantMessage[]
+  logs        RecommendationLog[]
+
+  @@index([userId, createdAt])
+}
+
+model AssistantMessage {
+  id             String               @id @default(cuid())
+  sessionId       String
+  role            AssistantMessageRole
+  intent          AssistantIntent?
+  content         String
+  structuredData  Json?
+
+  createdAt       DateTime             @default(now())
+
+  session         AssistantSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+
+model RecommendationLog {
+  id                 String            @id @default(cuid())
+  userId             String
+  sessionId          String?
+  intent             AssistantIntent?
+  recommendationType String
+  payload            Json
+  wasAccepted        Boolean?
+  createdAt          DateTime          @default(now())
+
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session            AssistantSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([sessionId])
+}
