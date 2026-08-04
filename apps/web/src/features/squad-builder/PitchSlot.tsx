@@ -33,8 +33,8 @@ export default function PitchSlot({ player, posId, isCaptain, isViceCaptain, onR
 
   if (isEmpty) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 76 }}>
-        <div style={{
+      <div className="sbslot" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 76 }}>
+        <div className="sbslot-circle" style={{
           width: 58, height: 58, borderRadius: "50%",
           border: `2px dashed ${c}38`, background: `${c}07`,
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -48,7 +48,7 @@ export default function PitchSlot({ player, posId, isCaptain, isViceCaptain, onR
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 76 }}>
+    <div className="sbslot" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 76 }}>
       <div style={{ position: "relative" }}>
         {/* Spinning ring */}
         <div style={{
@@ -57,7 +57,7 @@ export default function PitchSlot({ player, posId, isCaptain, isViceCaptain, onR
           animation: "rot 7s linear infinite", opacity: 0.65,
         }} />
         {/* Avatar */}
-        <div style={{
+        <div className="sbslot-circle" style={{
           position: "relative", width: 58, height: 58, borderRadius: "50%",
           background: `linear-gradient(145deg, ${c}44, ${c}18)`,
           border: `2px solid ${c}88`,
@@ -99,7 +99,7 @@ export default function PitchSlot({ player, posId, isCaptain, isViceCaptain, onR
       </div>
 
       {/* Name tag */}
-      <div style={{
+      <div className="sbslot-tag" style={{
         background: "rgba(0,0,0,.7)", backdropFilter: "blur(8px)",
         borderRadius: 7, padding: "3px 8px", maxWidth: 76,
         border: `1px solid ${c}33`,

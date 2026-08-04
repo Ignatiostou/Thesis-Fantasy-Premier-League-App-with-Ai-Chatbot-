@@ -22,3 +22,46 @@
 .pa3 {
   animation: fadeUp 0.4s 0.1s both;
 }
+
+/* ── Responsive: phones ── */
+@media (max-width: 640px) {
+  .pp-pitch {
+    padding: 26px 8px !important;
+  }
+
+  .pp-rows {
+    gap: 22px !important;
+  }
+
+  .pp-row {
+    gap: 8px !important;
+  }
+
+  .pp-circle {
+    width: 62px !important;
+    height: 62px !important;
+    border-width: 3px !important;
+  }
+
+  .pp-circle .pp-name {
+    font-size: 9px !important;
+    max-width: 52px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pp-pts {
+    min-width: 24px !important;
+    height: 24px !important;
+    font-size: 12px !important;
+    border-width: 2px !important;
+  }
+
+  .ph-grid {
+    grid-template-columns: 40px 1fr 42px 44px 46px !important;
+    gap: 5px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+}

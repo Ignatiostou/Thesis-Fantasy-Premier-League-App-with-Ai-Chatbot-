@@ -89,3 +89,4 @@ export interface PlayerGameweekStat {
   totalPoints:      number;
   inDreamteam:      boolean;
 }
+

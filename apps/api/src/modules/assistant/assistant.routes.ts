@@ -1,7 +1,6 @@
-// apps/api/src/modules/ai/ai.routes.ts
-
 import { Router } from 'express';
 import { requireAuth } from '../../middlewares/requireAuth.js';
+import { chatRateLimit } from '../../middlewares/chatRateLimit.js';
 import * as controller from './assistant.controller.js';
 
 export const aiRouter = Router();
@@ -18,8 +17,8 @@ aiRouter.get('/sessions/:sessionId/messages', requireAuth, controller.getSession
 aiRouter.post('/sessions/:sessionId/archive', requireAuth, controller.archiveSession);
 
 // Chat
-aiRouter.post('/chat', requireAuth, controller.chat);
-aiRouter.post('/chat/stream', requireAuth, controller.chatStream);
+aiRouter.post('/chat', requireAuth, chatRateLimit, controller.chat);
+aiRouter.post('/chat/stream', requireAuth, chatRateLimit, controller.chatStream);
 
 // Debug
 aiRouter.get('/context', requireAuth, controller.getContext);

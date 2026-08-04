@@ -84,6 +84,7 @@ export default function PointsPitch({ breakdown }: Props) {
   return (
     <>
       <div
+        className="pp-pitch"
         style={{
           background: "linear-gradient(180deg, rgba(34,197,94,.15) 0%, rgba(16,185,129,.08) 50%, rgba(34,197,94,.15) 100%)",
           border: "2px solid rgba(16,185,129,.25)",
@@ -129,10 +130,10 @@ export default function PointsPitch({ breakdown }: Props) {
           />
         </div>
 
-        <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 32 }}>
+        <div className="pp-rows" style={{ position: "relative", display: "flex", flexDirection: "column", gap: 32 }}>
           {/* GK */}
           {gk.length > 0 && (
-            <div style={{ display: "flex", justifyContent: "center", gap: 24 }}>
+            <div className="pp-row" style={{ display: "flex", justifyContent: "center", gap: 24 }}>
               {gk.map((p) => (
                 <PointsPitchSlot key={p.playerId} pick={p} />
               ))}
@@ -141,7 +142,7 @@ export default function PointsPitch({ breakdown }: Props) {
 
           {/* DEF */}
           {def.length > 0 && (
-            <div style={{ display: "flex", justifyContent: "center", gap: 24, flexWrap: "wrap" }}>
+            <div className="pp-row" style={{ display: "flex", justifyContent: "center", gap: 24, flexWrap: "wrap" }}>
               {def.map((p) => (
                 <PointsPitchSlot key={p.playerId} pick={p} />
               ))}
@@ -150,7 +151,7 @@ export default function PointsPitch({ breakdown }: Props) {
 
           {/* MID */}
           {mid.length > 0 && (
-            <div style={{ display: "flex", justifyContent: "center", gap: 24, flexWrap: "wrap" }}>
+            <div className="pp-row" style={{ display: "flex", justifyContent: "center", gap: 24, flexWrap: "wrap" }}>
               {mid.map((p) => (
                 <PointsPitchSlot key={p.playerId} pick={p} />
               ))}
@@ -159,7 +160,7 @@ export default function PointsPitch({ breakdown }: Props) {
 
           {/* FWD */}
           {fwd.length > 0 && (
-            <div style={{ display: "flex", justifyContent: "center", gap: 24, flexWrap: "wrap" }}>
+            <div className="pp-row" style={{ display: "flex", justifyContent: "center", gap: 24, flexWrap: "wrap" }}>
               {fwd.map((p) => (
                 <PointsPitchSlot key={p.playerId} pick={p} />
               ))}

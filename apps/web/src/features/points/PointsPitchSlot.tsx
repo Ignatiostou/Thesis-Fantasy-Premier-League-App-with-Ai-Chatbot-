@@ -73,6 +73,7 @@ export default function PointsPitchSlot({ pick }: Props) {
       )}
       
       <div
+        className="pp-circle"
         style={{
           width: 90,
           height: 90,
@@ -88,6 +89,7 @@ export default function PointsPitchSlot({ pick }: Props) {
         }}
       >
         <div
+          className="pp-pts"
           style={{
             position: "absolute",
             top: -4,
@@ -112,6 +114,7 @@ export default function PointsPitchSlot({ pick }: Props) {
         
         <div style={{ textAlign: "center", padding: "0 8px" }}>
           <div
+            className="pp-name"
             style={{
               fontSize: 13,
               fontWeight: 900,

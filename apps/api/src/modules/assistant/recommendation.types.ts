@@ -1,8 +1,3 @@
-// apps/api/src/modules/ai/recommendation.types.ts
-// Types for the recommendation engines.
-// Contains BOTH the rich types (used by recommendation.formatter.ts)
-// AND the simple types (used by the specialized services).
-
 // ── Shared ────────────────────────────────────────────────────────────────────
 
 export interface FixtureSummary {
@@ -26,10 +21,19 @@ export interface PlayerSnapshot {
   nextFixtures:      FixtureSummary[];
 }
 
-// ── RecommendationContextBlock ────────────────────────────────────────────────
-// What recommendation.service.ts returns to assistant.service.ts.
-// summary  = human-readable text injected into the prompt
-// structured = raw data saved in RecommendationLog.payload
+
+
+export type RecommendationHorizon = 'GW1' | 'GW3' | 'GW5' | 'SEASON';
+
+export interface RecommendationExplanation {
+  upside:       string;   // e.g. "+3.2 expected points vs. current captain"
+  risk:         string;   // e.g. "30% chance of rotation; tough away fixture"
+  horizon:      RecommendationHorizon;
+  alternative:  string;   // e.g. "If you want a safer pick, consider <player>"
+  confidence:   'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+
 
 export interface RecommendationContextBlock {
   intent:     string;
@@ -37,17 +41,18 @@ export interface RecommendationContextBlock {
   structured: Record<string, unknown> | null;
 }
 
-// ── Captain recommendation ────────────────────────────────────────────────────
-// Used by captaincy.service.ts → recommendation.service.ts
+
 
 export interface CaptainCandidateSummary {
-  playerId:  number;
-  webName:   string;
-  club:      string;
-  position:  string;
-  score:     number;
-  reasons:   string[];
-  risk:      string[];
+  playerId:     number;
+  webName:      string;
+  club:         string;
+  position:     string;
+  score:        number;
+  reasons:      string[];
+  risk:         string[];
+  /** IMPROVEMENT #2: structured explanation guaranteed on every candidate, not just the top pick. */
+  explanation:  RecommendationExplanation;
 }
 
 // Rich version used by recommendation.formatter.ts (for the RecommendationBlock pipeline)
@@ -67,6 +72,8 @@ export interface CaptainRecommendation {
   candidates:    CaptainCandidate[];
   topPick:       CaptainCandidate;
   differential?: CaptainCandidate;
+  /** IMPROVEMENT #2: explanation for the topPick specifically. */
+  explanation?:  RecommendationExplanation;
 }
 
 // ── Player comparison ─────────────────────────────────────────────────────────
@@ -78,7 +85,7 @@ export interface PlayerComparisonPlayerData {
   club:                    string;
   position:                string;
   nowCost:                 number;
-  totalPoints:             number;
+  totalPoints:              number;
   form:                    number | null;
   chanceOfPlayingNextRound:number | null;
   status:                  string;
@@ -90,6 +97,8 @@ export interface PlayerComparisonSimpleResult {
   found:           boolean;
   players:         PlayerComparisonPlayerData[];
   recommendation?: string;
+  /** IMPROVEMENT #2 */
+  explanation?:    RecommendationExplanation;
 }
 
 // Rich version used by recommendation.formatter.ts
@@ -108,6 +117,8 @@ export interface PlayerComparisonRichResult {
   verdict:    'A' | 'B' | 'DRAW';
   reasoning:  string;
   priceDiff:  number;
+  /** IMPROVEMENT #2 */
+  explanation?: RecommendationExplanation;
 }
 
 // ── Transfer evaluation ───────────────────────────────────────────────────────
@@ -144,6 +155,8 @@ export interface TransferEvaluationResult {
   };
   recommendation?: string;
   risks?:          string[];
+  /** IMPROVEMENT #2 */
+  explanation?:    RecommendationExplanation;
 }
 
 // Rich version used by recommendation.formatter.ts
@@ -171,6 +184,8 @@ export interface TransferEvaluation {
   topOption:       TransferOption | null;
   hitAdvice:       'AVOID' | 'WORTH_IT' | 'BORDERLINE';
   hitAdviceReason: string;
+  /** IMPROVEMENT #2 */
+  explanation?:    RecommendationExplanation;
 }
 
 // ── RecommendationBlock ───────────────────────────────────────────────────────

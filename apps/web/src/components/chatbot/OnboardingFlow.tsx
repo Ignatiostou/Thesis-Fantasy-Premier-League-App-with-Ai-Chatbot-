@@ -1,5 +1,4 @@
-
-
+// apps/web/src/components/chatbot/OnboardingFlow.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -9,6 +8,20 @@ import { useOnboarding } from '@/lib/hooks/useOnboarding';
 interface Props {
   onComplete: () => void;
 }
+
+// Maps question IDs to a descriptive emoji + category label
+const QUESTION_META: Record<string, { emoji: string; category: string }> = {
+  riskTolerance:          { emoji: '🎲', category: 'Risk'         },
+  budgetStyle:            { emoji: '💰', category: 'Budget'       },
+  preferredFocus:         { emoji: '🎯', category: 'Focus'        },
+  differentialPreference: { emoji: '🔀', category: 'Differentials'},
+  planningHorizon:        { emoji: '📅', category: 'Horizon'      },
+  explanationDepth:       { emoji: '📖', category: 'Detail'       },
+  captaincyStyle:         { emoji: '👑', category: 'Captaincy'    },
+  transferFrequency:      { emoji: '🔄', category: 'Transfers'    },
+  fixtureAwareness:       { emoji: '🗓️', category: 'Fixtures'    },
+  topSixAffinity:         { emoji: '⭐', category: 'Big Six'      },
+};
 
 export function OnboardingFlow({ onComplete }: Props) {
   const { questions, loading, error, loadQuestions, saveStep, complete } = useOnboarding();
@@ -36,33 +49,30 @@ export function OnboardingFlow({ onComplete }: Props) {
       >
         <div
           style={{
-            width: 28,
-            height: 28,
+            width: 28, height: 28,
             border: '2px solid rgba(0,255,135,0.2)',
             borderTop: '2px solid #00FF87',
             borderRadius: '50%',
             animation: 'spin 0.7s linear infinite',
           }}
         />
-        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, letterSpacing: '0.1em' }}>
+        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, letterSpacing: '0.1em', margin: 0 }}>
           Loading profile setup…
         </p>
       </div>
     );
   }
 
-  const q       = questions[currentStep];
-  const total   = questions.length;
-  const isLast  = currentStep === total - 1;
-  const pct     = Math.round(((currentStep + 1) / total) * 100);
+  const q      = questions[currentStep];
+  const total  = questions.length;
+  const isLast = currentStep === total - 1;
+  const pct    = Math.round(((currentStep + 1) / total) * 100);
+  const meta   = QUESTION_META[q.id] ?? { emoji: '❓', category: 'Profile' };
 
   async function handleAnswer(value: number) {
     if (animating || saving || selected !== null) return;
     setSelected(value);
-    const newAnswers = { 
-      ...answers, 
-      [q.id]: value as 1 | 2 | 3
-    } as Partial<CompleteOnboardingInput>;
+    const newAnswers = { ...answers, [q.id]: value as 1 | 2 | 3 } as Partial<CompleteOnboardingInput>;
     setAnswers(newAnswers);
     saveStep(q.step, q.id, value as 1 | 2 | 3);
     setAnimating(true);
@@ -90,78 +100,97 @@ export function OnboardingFlow({ onComplete }: Props) {
         fontFamily: "'Barlow Condensed', 'Impact', sans-serif",
       }}
     >
-      {/* Progress */}
-      <div style={{ padding: '14px 18px 12px', flexShrink: 0 }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 8,
-          }}
-        >
-          <span
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .ob-option { transition: all 0.15s ease; }
+        .ob-option:not(:disabled):hover {
+          background: rgba(0,255,135,0.06) !important;
+          border-color: rgba(0,255,135,0.3) !important;
+          color: white !important;
+          transform: translateX(3px);
+        }
+      `}</style>
+
+      {/* Progress header */}
+      <div style={{ padding: '12px 16px 10px', flexShrink: 0 }}>
+        {/* Step dots */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+          {questions.map((_, i) => (
+            <div
+              key={i}
+              style={{
+                height: 3,
+                flex: 1,
+                borderRadius: 99,
+                background: i < currentStep
+                  ? '#00FF87'
+                  : i === currentStep
+                  ? 'linear-gradient(90deg, #00FF87, #00d4ff)'
+                  : 'rgba(255,255,255,0.08)',
+                transition: 'all 0.4s ease',
+                boxShadow: i === currentStep ? '0 0 6px rgba(0,255,135,0.4)' : 'none',
+              }}
+            />
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* Category badge */}
+          <div
             style={{
-              color: '#00FF87',
-              fontSize: 10,
-              fontWeight: 600,
-              letterSpacing: '0.2em',
-              textTransform: 'uppercase',
-              fontFamily: "'Barlow', sans-serif",
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              background: 'rgba(0,255,135,0.08)',
+              border: '1px solid rgba(0,255,135,0.18)',
+              borderRadius: 6,
+              padding: '3px 8px',
             }}
           >
-            Coach Profile
-          </span>
+            <span style={{ fontSize: 11 }}>{meta.emoji}</span>
+            <span
+              style={{
+                color: '#00FF87',
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                fontFamily: "'Barlow', sans-serif",
+              }}
+            >
+              {meta.category}
+            </span>
+          </div>
+
           <span
             style={{
-              color: 'rgba(255,255,255,0.3)',
+              color: 'rgba(255,255,255,0.25)',
               fontSize: 10,
               fontFamily: "'Barlow', sans-serif",
               letterSpacing: '0.1em',
             }}
           >
-            {String(currentStep + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
+            {String(currentStep + 1).padStart(2, '0')}/{String(total).padStart(2, '0')}
           </span>
-        </div>
-
-        {/* Progress bar — matches your pill stat bars */}
-        <div
-          style={{
-            height: 3,
-            borderRadius: 99,
-            background: 'rgba(255,255,255,0.08)',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              height: '100%',
-              borderRadius: 99,
-              background: 'linear-gradient(90deg, #00FF87, #00d4ff)',
-              width: `${pct}%`,
-              transition: 'width 0.4s ease',
-            }}
-          />
         </div>
       </div>
 
-      {/* Question */}
+      {/* Question area */}
       <div
         style={{
           flex: 1,
-          padding: '4px 18px 18px',
+          padding: '0 16px 16px',
           overflow: 'hidden',
-          opacity: animating ? 0 : 1,
-          transform: animating ? 'translateY(8px)' : 'translateY(0)',
-          transition: 'opacity 0.2s ease, transform 0.2s ease',
+          opacity:    animating ? 0 : 1,
+          transform:  animating ? 'translateY(10px)' : 'translateY(0)',
+          transition: 'opacity 0.22s ease, transform 0.22s ease',
         }}
       >
-        {/* Bot message bubble */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'flex-start' }}>
+        {/* Bot bubble */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'flex-start' }}>
           <div
             style={{
-              width: 30,
-              height: 30,
+              width: 30, height: 30,
               borderRadius: '50%',
               background: 'linear-gradient(135deg, #00FF87, #00d4ff)',
               display: 'flex',
@@ -180,18 +209,19 @@ export function OnboardingFlow({ onComplete }: Props) {
               background: 'rgba(255,255,255,0.05)',
               border: '1px solid rgba(255,255,255,0.08)',
               borderRadius: '0 14px 14px 14px',
-              padding: '10px 14px',
+              padding: '10px 13px',
               flex: 1,
             }}
           >
             <p
               style={{
                 color: 'white',
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: 700,
                 letterSpacing: '0.02em',
                 margin: 0,
-                lineHeight: 1.35,
+                lineHeight: 1.4,
+                fontFamily: "'Barlow', sans-serif",
               }}
             >
               {q.question}
@@ -203,7 +233,7 @@ export function OnboardingFlow({ onComplete }: Props) {
                   fontSize: 11,
                   fontFamily: "'Barlow', sans-serif",
                   fontWeight: 400,
-                  margin: '6px 0 0',
+                  margin: '5px 0 0',
                   lineHeight: 1.5,
                 }}
               >
@@ -214,52 +244,66 @@ export function OnboardingFlow({ onComplete }: Props) {
         </div>
 
         {/* Options */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 40 }}>
-          {q.options.map((opt) => {
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingLeft: 40 }}>
+          {q.options.map((opt, idx) => {
             const isChosen = selected === opt.value;
+            const dimmed   = selected !== null && !isChosen;
+
+            // Value labels (1=low/safe, 2=balanced, 3=high/aggressive)
+            const valueDots = ['●○○', '●●○', '●●●'][opt.value - 1];
+
             return (
               <button
                 key={opt.value}
+                className="ob-option"
                 onClick={() => handleAnswer(opt.value)}
                 disabled={selected !== null}
                 style={{
                   width: '100%',
                   textAlign: 'left',
-                  padding: '10px 14px',
-                  borderRadius: 12,
+                  padding: '9px 13px',
+                  borderRadius: 11,
                   border: isChosen
                     ? '1px solid #00FF87'
                     : '1px solid rgba(255,255,255,0.08)',
                   background: isChosen
                     ? 'rgba(0,255,135,0.1)'
                     : 'rgba(255,255,255,0.03)',
-                  color: isChosen
-                    ? '#00FF87'
-                    : selected !== null
-                    ? 'rgba(255,255,255,0.2)'
-                    : 'rgba(255,255,255,0.8)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  letterSpacing: '0.03em',
-                  fontFamily: "'Barlow Condensed', sans-serif",
                   cursor: selected !== null ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.15s ease',
-                  transform: isChosen ? 'scale(0.98)' : 'scale(1)',
-                }}
-                onMouseEnter={(e) => {
-                  if (selected !== null) return;
-                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,255,135,0.06)';
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(0,255,135,0.3)';
-                  (e.currentTarget as HTMLButtonElement).style.color = 'white';
-                }}
-                onMouseLeave={(e) => {
-                  if (selected !== null || isChosen) return;
-                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.03)';
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.08)';
-                  (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.8)';
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  transform: isChosen ? 'translateX(3px)' : 'none',
                 }}
               >
-                {opt.label}
+                <span
+                  style={{
+                    color: isChosen ? '#00FF87' : dimmed ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: '0.02em',
+                    fontFamily: "'Barlow', sans-serif",
+                    lineHeight: 1.3,
+                    transition: 'color 0.15s',
+                  }}
+                >
+                  {opt.label}
+                </span>
+
+                {/* Visual intensity indicator */}
+                <span
+                  style={{
+                    color: isChosen ? '#00FF87' : 'rgba(255,255,255,0.15)',
+                    fontSize: 9,
+                    letterSpacing: 2,
+                    flexShrink: 0,
+                    fontFamily: 'monospace',
+                    transition: 'color 0.15s',
+                  }}
+                >
+                  {valueDots}
+                </span>
               </button>
             );
           })}
@@ -275,7 +319,7 @@ export function OnboardingFlow({ onComplete }: Props) {
               fontFamily: "'Barlow', sans-serif",
             }}
           >
-            {error}
+            ⚠️ {error}
           </p>
         )}
       </div>
@@ -295,22 +339,14 @@ export function OnboardingFlow({ onComplete }: Props) {
         >
           <div
             style={{
-              width: 14,
-              height: 14,
+              width: 14, height: 14,
               border: '2px solid rgba(0,255,135,0.2)',
               borderTop: '2px solid #00FF87',
               borderRadius: '50%',
               animation: 'spin 0.7s linear infinite',
             }}
           />
-          <span
-            style={{
-              color: 'rgba(255,255,255,0.4)',
-              fontSize: 11,
-              fontFamily: "'Barlow', sans-serif",
-              letterSpacing: '0.1em',
-            }}
-          >
+          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontFamily: "'Barlow', sans-serif", letterSpacing: '0.1em' }}>
             Saving your profile…
           </span>
         </div>

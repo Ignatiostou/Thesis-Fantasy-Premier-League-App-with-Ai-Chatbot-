@@ -8,6 +8,7 @@ import { fplRouter }            from './modules/fpl/fpl.routes.js';
 import { teamRouter }           from './modules/team/team.routes.js';
 import { startFplSyncScheduler } from './jobs/Fpl-sync.sheduler.js';
 import { startScoringScheduler } from './jobs/scoring.scheduler.js';
+import { startMlPipelineScheduler } from './jobs/ml-pipeline.scheduler.js';
 import { transfersRouter }      from './modules/transfers/transfers.router.js';
 import { chipsRouter }          from './modules/chips/chips.routes.js';
 import { pointsRouter }          from './modules/points/points.routes.js';
@@ -33,7 +34,7 @@ app.use('/points', pointsRouter);
 app.use('/leagues', leaguesRouter);
 app.use('/ai',      aiRouter);
 // ── Start ─────────────────────────────────────────────────────────────────────
-const port = Number(process.env.PORT ?? 4000);
+const port = Number(process.env.PORT ?? 4001);
 app.listen(port, () => {
   console.log(`[api] http://localhost:${port}`);
 
@@ -41,4 +42,8 @@ app.listen(port, () => {
   // Replaces the old node-cron every-6-hours job.
   startFplSyncScheduler();
   startScoringScheduler();
+
+  // ML pipeline: every 15 min, checks for a newly completed (data_checked)
+  // gameweek → imports results, retrains the model, predicts the next GW.
+  startMlPipelineScheduler();
 });

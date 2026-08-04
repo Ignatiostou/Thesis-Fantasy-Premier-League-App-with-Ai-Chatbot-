@@ -41,6 +41,7 @@ export default function PlayerSlot({
 
   return (
     <div
+      className="pslot"
       draggable
       onDragStart={(e) => onDragStart?.(player, e)}
       onDragOver={(e) => onDragOver?.(player, e)}
@@ -81,7 +82,7 @@ export default function PlayerSlot({
           animation: "rot 6s linear infinite",
           opacity: isSrc ? 1 : (isTarget || canDrop) ? 0.9 : 0.65,
         }} />
-        <div style={{
+        <div className="pslot-circle" style={{
           position: "relative", width: 54, height: 54, borderRadius: "50%",
           background: isSrc
             ? `linear-gradient(145deg,${ACCENT}55,${ACCENT}22)`
@@ -123,7 +124,7 @@ export default function PlayerSlot({
         )}
       </div>
 
-      <div style={{
+      <div className="pslot-tag" style={{
         background: isSrc ? `linear-gradient(135deg,${ACCENT}28,${ACCENT}14)` : (isTarget || canDrop) ? `${c}18` : "rgba(0,0,0,.65)",
         backdropFilter: "blur(8px)", borderRadius: 7, padding: "3px 8px", maxWidth: 76,
         border: isSrc ? `1px solid ${ACCENT}44` : (isTarget || canDrop) ? `1px solid ${c}44` : "1px solid rgba(255,255,255,.07)",

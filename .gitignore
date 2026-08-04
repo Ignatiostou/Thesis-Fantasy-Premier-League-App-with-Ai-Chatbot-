@@ -24,3 +24,14 @@ pnpm-debug.log*
 
 # misc
 coverage/
+
+# sync-conflict copies (contain secrets / duplicates)
+*-LAPTOP-3OCSMQUT*
+
+# accidentally duplicated ML output path
+apps/ai/apps/
+
+# ML artifacts anywhere
+**/artifacts/models/
+**/artifacts/datasets/
+**/artifacts/reports/

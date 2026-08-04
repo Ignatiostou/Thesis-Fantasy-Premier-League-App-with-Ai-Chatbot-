@@ -116,6 +116,24 @@ export default function AuthPage() {
         .pw-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;transition:background .25s,transform .2s}
         .pw-dot.ok{transform:scale(1.3)}
         input[type=password]::-ms-reveal{display:none}
+
+        /* ── Responsive: stack card above branding on small screens ── */
+        @media (max-width: 900px) {
+          .auth-main {
+            flex-direction: column !important;
+            gap: 32px !important;
+            padding: 8px 18px 48px !important;
+            align-items: stretch !important;
+          }
+          .auth-card {
+            order: -1;
+            width: 100% !important;
+            padding: 24px 20px 26px !important;
+          }
+          .auth-brand {
+            max-width: none !important;
+          }
+        }
       `}</style>
 
       {/* Background */}
@@ -134,7 +152,7 @@ export default function AuthPage() {
       </div>
 
       {/* Header */}
-      <div style={{ position:"relative", zIndex:10, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"24px 40px 16px" }}>
+      <div style={{ position:"relative", zIndex:10, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"24px clamp(18px, 4vw, 40px) 16px", gap:12, flexWrap:"wrap" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
           <div style={{ width:32, height:32, borderRadius:"50%", background:ACCENT, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:14, color:"#0a0e1a" }}>F</div>
           <span style={{ color:"white", fontWeight:700, fontSize:16, letterSpacing:"0.2em" }}>FPL MANAGER</span>
@@ -145,10 +163,10 @@ export default function AuthPage() {
       </div>
 
       {/* Main */}
-      <div style={{ position:"relative", zIndex:10, flex:1, display:"flex", alignItems:"center", padding:"16px 40px 40px", gap:60, maxWidth:1120, margin:"0 auto", width:"100%", boxSizing:"border-box" }}>
+      <div className="auth-main" style={{ position:"relative", zIndex:10, flex:1, display:"flex", alignItems:"center", padding:"16px 40px 40px", gap:60, maxWidth:1120, margin:"0 auto", width:"100%", boxSizing:"border-box" }}>
 
         {/* LEFT: branding */}
-        <div style={{ flex:1, maxWidth:440 }}>
+        <div className="auth-brand" style={{ flex:1, maxWidth:440 }}>
           <p className="fade-1" style={{ color:ACCENT, fontSize:11, fontWeight:600, letterSpacing:"0.3em", textTransform:"uppercase", marginBottom:14, fontFamily:"'Barlow',sans-serif" }}>
             {mode === "login" ? "Welcome back" : "Join the game"}
           </p>
@@ -178,7 +196,7 @@ export default function AuthPage() {
         </div>
 
         {/* RIGHT: card */}
-        <div className="fade-5" style={{ width:430, flexShrink:0, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:24, padding:"28px 30px 30px", backdropFilter:"blur(14px)", boxShadow:"0 24px 80px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
+        <div className="fade-5 auth-card" style={{ width:430, maxWidth:"100%", flexShrink:0, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:24, padding:"28px 30px 30px", backdropFilter:"blur(14px)", boxShadow:"0 24px 80px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)", boxSizing:"border-box" }}>
 
           {/* Mode tabs */}
           <div style={{ display:"flex", gap:6, background:"rgba(0,0,0,0.3)", borderRadius:12, padding:4, marginBottom:24 }}>

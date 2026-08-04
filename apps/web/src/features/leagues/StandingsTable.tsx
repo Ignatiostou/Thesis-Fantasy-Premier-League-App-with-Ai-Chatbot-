@@ -13,7 +13,7 @@ export default function StandingsTable({ standings, myUserId }: Props) {
   return (
     <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 14, overflow: "hidden" }}>
       {/* Header */}
-      <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 1fr 70px 70px", gap: 8, padding: "10px 16px", background: "rgba(255,255,255,.025)", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+      <div className="st-grid" style={{ display: "grid", gridTemplateColumns: "36px 1fr 1fr 70px 70px", gap: 8, padding: "10px 16px", background: "rgba(255,255,255,.025)", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
         {["#", "Manager", "Team", "GW", "Total"].map((h, i) => (
           <div key={h} style={{ color: "rgba(255,255,255,.28)", fontSize: 8, fontWeight: 700, letterSpacing: ".15em", textTransform: "uppercase", fontFamily: "'Barlow',sans-serif", textAlign: i > 1 ? "right" : "left" }}>
             {h}
@@ -25,7 +25,7 @@ export default function StandingsTable({ standings, myUserId }: Props) {
       {standings.map((row) => {
         const isMe = row.userId === myUserId;
         return (
-          <div key={row.userId} style={{
+          <div key={row.userId} className="st-grid" style={{
             display: "grid", gridTemplateColumns: "36px 1fr 1fr 70px 70px",
             gap: 8, padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,.04)",
             background: isMe ? `${ACCENT}07` : "transparent", alignItems: "center",

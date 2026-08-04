@@ -754,6 +754,7 @@ export default function TransfersPage() {
 
   return (
     <div
+      className="tr-root"
       style={{
         fontFamily: "'Barlow Condensed','Impact',sans-serif",
         height: "100vh",
@@ -799,6 +800,56 @@ export default function TransfersPage() {
         .pg-b:disabled { opacity:.25; cursor:not-allowed; }
 
         .tab-btn { flex:1; padding:10px 0; border:none; background:transparent; font-family:'Barlow Condensed',sans-serif; font-weight:800; font-size:11px; letter-spacing:.2em; text-transform:uppercase; cursor:pointer; transition:all .2s; }
+
+        /* ── Responsive: stack the three panels below 980px ── */
+        @media (max-width: 980px) {
+          .tr-root {
+            height: auto !important;
+            min-height: 100dvh;
+            overflow: visible !important;
+          }
+          .tr-body {
+            flex-direction: column !important;
+          }
+          .tr-squadcol {
+            width: 100% !important;
+            border-right: none !important;
+            border-bottom: 1px solid rgba(255,255,255,.06);
+          }
+          .tr-side-scroll {
+            max-height: 44vh;
+          }
+          .tr-marketcol {
+            border-right: none !important;
+            border-bottom: 1px solid rgba(255,255,255,.06);
+          }
+          .tr-market-scroll {
+            max-height: 48vh;
+            min-height: 160px;
+          }
+          .tr-cartcol {
+            width: 100% !important;
+          }
+          .tr-cart-scroll {
+            max-height: 44vh;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .tr-topbar {
+            flex-wrap: wrap;
+            padding: 10px 14px !important;
+            gap: 10px;
+          }
+          .tr-stats {
+            flex-wrap: wrap;
+            gap: 12px !important;
+            width: 100%;
+            justify-content: space-between;
+          }
+          .pg-b { min-width: 34px; height: 34px; }
+          .tab-btn { padding: 13px 0; }
+        }
       `}</style>
 
       <div
@@ -829,7 +880,7 @@ export default function TransfersPage() {
       </div>
 
       <div
-        className="fade-a"
+        className="fade-a tr-topbar"
         style={{
           position: "relative",
           zIndex: 10,
@@ -884,7 +935,7 @@ export default function TransfersPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div className="tr-stats" style={{ display: "flex", alignItems: "center", gap: 16 }}>
           {[
             {
               label: "Gameweek",
@@ -990,7 +1041,7 @@ export default function TransfersPage() {
       </div>
 
       <div
-        className="fade-b"
+        className="fade-b tr-body"
         style={{
           flex: 1,
           display: "flex",
@@ -1000,6 +1051,7 @@ export default function TransfersPage() {
         }}
       >
         <div
+          className="tr-squadcol"
           style={{
             width: 295,
             flexShrink: 0,
@@ -1034,6 +1086,7 @@ export default function TransfersPage() {
 
           {tab === "squad" ? (
             <div
+              className="tr-side-scroll"
               style={{ flex: 1, overflowY: "auto", padding: "10px 10px 14px" }}
             >
               {!selectedOutId && cart.length === 0 && (
@@ -1159,7 +1212,7 @@ export default function TransfersPage() {
               )}
             </div>
           ) : (
-            <div style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
+            <div className="tr-side-scroll" style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
               {history.length === 0 ? (
                 <div
                   style={{
@@ -1186,6 +1239,7 @@ export default function TransfersPage() {
         </div>
 
         <div
+          className="tr-marketcol"
           style={{
             flex: 1,
             display: "flex",
@@ -1307,6 +1361,7 @@ export default function TransfersPage() {
           </div>
 
           <div
+            className="tr-market-scroll"
             style={{
               flex: 1,
               overflowY: "auto",
@@ -1419,6 +1474,7 @@ export default function TransfersPage() {
         </div>
 
         <div
+          className="tr-cartcol"
           style={{
             width: 275,
             flexShrink: 0,
@@ -1486,7 +1542,7 @@ export default function TransfersPage() {
             )}
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
+          <div className="tr-cart-scroll" style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
             {cart.length === 0 ? (
               <div
                 style={{

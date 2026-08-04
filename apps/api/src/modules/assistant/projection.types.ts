@@ -1,4 +1,7 @@
 export type ProjectionHorizon = 'GW1' | 'GW3' | 'GW5';
+export type ProjectionSource   = 'ML' | 'HEURISTIC';
+
+
 
 export interface PlayerProjection {
   playerId:         number;
@@ -22,7 +25,8 @@ export interface PlayerProjection {
   outlook:          'excellent' | 'good' | 'average' | 'poor' | 'unknown';
   fixtureRun:       'easy' | 'mixed' | 'tough';
   confidence:       'HIGH' | 'MEDIUM' | 'LOW';  // how reliable the projection is
-
+  source:            ProjectionSource; 
+  
   // Raw inputs used in calculation (useful for debugging)
   form:             number;
   avgPts:           number;         // season average points per game
@@ -44,6 +48,7 @@ export interface SquadProjection {
   topReturner:       PlayerProjection;   // highest xPts in XI
   weakestLink:       PlayerProjection;   // lowest xPts starter (transfer target)
   riskPlayers:       PlayerProjection[]; // chanceOfPlaying < 75 or status != 'a'
+  mlCoverage:        number;
 }
 
 // ── Transfer delta projection ─────────────────────────────────────────────────
@@ -82,5 +87,6 @@ export interface CaptainProjectionCandidate {
   isSafePick:        boolean;
   isHighUpside:      boolean;
   isCurrentCaptain:  boolean;
+  source:           ProjectionSource;
 }
 

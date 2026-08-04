@@ -131,7 +131,7 @@ export default function LeaguesPage() {
         fontFamily: "'Barlow Condensed','Impact',sans-serif",
         minHeight: "100vh",
         background: "#0a0e1a",
-        padding: "22px 26px 48px",
+        padding: "clamp(14px, 3vw, 22px) clamp(14px, 3.5vw, 26px) 48px",
       }}
     >
       <style>{`
@@ -140,6 +140,26 @@ export default function LeaguesPage() {
         @keyframes slideIn { from { opacity:0;transform:translateY(-8px); } to { opacity:1;transform:translateY(0); } }
         .la  { animation: fadeUp .4s both; }
         .la2 { animation: fadeUp .4s .06s both; }
+
+        .la2 {
+          display: grid;
+          grid-template-columns: 280px 1fr;
+          gap: 18px;
+          align-items: start;
+        }
+
+        @media (max-width: 760px) {
+          .la2 { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 640px) {
+          .st-grid {
+            grid-template-columns: 28px 1fr 1fr 40px 52px !important;
+            gap: 5px !important;
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+          }
+        }
         input::placeholder { color: rgba(255,255,255,.22); }
         input:focus { border-color: ${ACCENT}44 !important; outline: none; }
       `}</style>
@@ -234,15 +254,7 @@ export default function LeaguesPage() {
         {loading ? (
           <Spinner label="Loading…" />
         ) : (
-          <div
-            className="la2"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "280px 1fr",
-              gap: 18,
-              alignItems: "start",
-            }}
-          >
+          <div className="la2">
             {/* Left: league list */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {leagues.length === 0 ? (

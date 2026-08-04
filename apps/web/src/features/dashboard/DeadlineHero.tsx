@@ -25,7 +25,8 @@ export default function DeadlineHero({ iso, label, gwName }: DeadlineHeroProps) 
       position: "relative",
       background: "linear-gradient(135deg, rgba(0,255,135,.07) 0%, rgba(0,212,170,.03) 50%, transparent 100%)",
       border: `1px solid ${urgent ? "rgba(239,68,68,.35)" : "rgba(0,255,135,.2)"}`,
-      borderRadius: 24, padding: "28px 36px", overflow: "hidden", flexShrink: 0,
+      borderRadius: 24, padding: "clamp(18px, 4vw, 28px) clamp(18px, 5vw, 36px)", overflow: "hidden", flexShrink: 0,
+      maxWidth: "100%",
     }}>
       <div style={{
         position: "absolute", top: -40, right: -40, width: 200, height: 200, borderRadius: "50%",
@@ -45,14 +46,14 @@ export default function DeadlineHero({ iso, label, gwName }: DeadlineHeroProps) 
           DEADLINE PASSED
         </div>
       ) : (
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", gap: "clamp(5px, 1.5vw, 10px)", alignItems: "flex-start" }}>
           {units.map(({ v, l }, i) => (
-            <div key={l} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div key={l} style={{ display: "flex", alignItems: "center", gap: "clamp(5px, 1.5vw, 10px)" }}>
               <div style={{ textAlign: "center" }}>
                 <div style={{
-                  fontFamily: "'Bebas Neue',sans-serif", fontSize: 52, fontWeight: 400, lineHeight: 1,
+                  fontFamily: "'Bebas Neue',sans-serif", fontSize: "clamp(34px, 9vw, 52px)", fontWeight: 400, lineHeight: 1,
                   color: urgent ? "#ef4444" : ACCENT, letterSpacing: "-.02em",
-                  textShadow: `0 0 30px ${glowColor}60`, minWidth: 60, textAlign: "center",
+                  textShadow: `0 0 30px ${glowColor}60`, minWidth: "clamp(38px, 10vw, 60px)", textAlign: "center",
                 }}>
                   {String(v).padStart(2, "0")}
                 </div>
@@ -61,7 +62,7 @@ export default function DeadlineHero({ iso, label, gwName }: DeadlineHeroProps) 
                 </div>
               </div>
               {i < 3 && (
-                <div style={{ color: "rgba(255,255,255,.18)", fontSize: 36, fontFamily: "'Bebas Neue',sans-serif", lineHeight: 1, marginTop: 4, animation: "colonBlink 1s step-end infinite" }}>:</div>
+                <div style={{ color: "rgba(255,255,255,.18)", fontSize: "clamp(24px, 6vw, 36px)", fontFamily: "'Bebas Neue',sans-serif", lineHeight: 1, marginTop: 4, animation: "colonBlink 1s step-end infinite" }}>:</div>
               )}
             </div>
           ))}

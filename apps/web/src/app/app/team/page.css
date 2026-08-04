@@ -77,3 +77,73 @@
   background: rgba(255, 255, 255, 0.08);
   border-radius: 2px;
 }
+
+/* ── Responsive: tablet & below — stack pitch above side panel ── */
+@media (max-width: 900px) {
+  .team-root {
+    height: auto !important;
+    min-height: 100dvh;
+    overflow: visible !important;
+  }
+
+  .team-body {
+    flex-direction: column !important;
+    overflow: visible !important;
+  }
+
+  .team-pitchcol {
+    padding: 8px !important;
+  }
+
+  .team-pitch {
+    flex: 0 0 auto !important;
+    height: clamp(420px, 58vh, 560px);
+  }
+
+  .team-side {
+    width: 100% !important;
+    border-left: none !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    padding: 14px !important;
+    overflow: visible !important;
+  }
+}
+
+/* ── Responsive: phones ── */
+@media (max-width: 640px) {
+  .team-topbar {
+    flex-wrap: wrap;
+    padding: 10px 12px !important;
+    gap: 10px !important;
+  }
+
+  .team-actions {
+    width: 100%;
+    margin-left: 0 !important;
+    flex-wrap: wrap;
+  }
+
+  .team-actions button {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  .team-pitch {
+    height: clamp(380px, 52vh, 480px);
+  }
+
+  .pslot {
+    width: 62px !important;
+  }
+
+  .pslot-circle {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 8px !important;
+  }
+
+  .pslot-tag {
+    max-width: 62px !important;
+    padding: 2px 5px !important;
+  }
+}

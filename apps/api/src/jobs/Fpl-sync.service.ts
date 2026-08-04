@@ -1,5 +1,3 @@
-
-
 import { prisma } from '../db/prisma.js';
 
 const BOOTSTRAP_URL = 'https://fantasy.premierleague.com/api/bootstrap-static/';
@@ -36,27 +34,42 @@ export interface SyncSummary {
   players:        number;
   fixtures:       number;
   elapsedSeconds: number;
+  playersGoneFromApi: number;
 }
 
 export async function refreshFplData(): Promise<SyncSummary> {
   console.log('[FPL] Starting data refresh…');
   const startedAt = Date.now();
 
-  // Fetch both endpoints in parallel
+  
   const [bootstrap, fixtures] = await Promise.all([
     fetchJson(BOOTSTRAP_URL),
     fetchJson(FIXTURES_URL),
   ]);
 
-  // Teams + Events have no inter-dependency — run in parallel
+  
   const [teamsCount, eventsCount] = await Promise.all([
     syncTeams(bootstrap.teams   as any[]),
     syncEvents(bootstrap.events as any[]),
   ]);
 
-  // Players depend on teams; fixtures depend on teams + events
+  
   const playersCount  = await syncPlayers(bootstrap.elements as any[]);
   const fixturesCount = await syncFixtures(fixtures           as any[]);
+
+
+  const apiPlayerIds = new Set<number>((bootstrap.elements as any[]).map((p) => p.id));
+  const dbPlayerIds = await prisma.fplPlayer.findMany({ select: { id: true, webName: true } });
+  const goneFromApi = dbPlayerIds.filter((p) => !apiPlayerIds.has(p.id));
+  if (goneFromApi.length > 0) {
+    console.warn(
+      `[FPL]   ⚠ ${goneFromApi.length} player(s) in our DB no longer appear in the FPL API response ` +
+      `(likely released/retired): ${goneFromApi.slice(0, 10).map((p) => p.webName).join(', ')}` +
+      `${goneFromApi.length > 10 ? '…' : ''}. They are NOT deleted (FK history), but ` +
+      `player-eligibility.service.ts should exclude them from recommendations once their recent-GW ` +
+      `appearance window expires.`,
+    );
+  }
 
   const elapsedSeconds = Number(((Date.now() - startedAt) / 1000).toFixed(1));
   const summary: SyncSummary = {
@@ -65,6 +78,7 @@ export async function refreshFplData(): Promise<SyncSummary> {
     players:  playersCount,
     fixtures: fixturesCount,
     elapsedSeconds,
+    playersGoneFromApi: goneFromApi.length,
   };
 
   console.log(`[FPL] Refresh complete in ${elapsedSeconds}s`, summary);

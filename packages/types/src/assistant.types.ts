@@ -16,6 +16,7 @@ export type AssistantSessionStatus = 'ACTIVE' | 'ARCHIVED';
 export type AssistantMessageRole = 'SYSTEM' | 'USER' | 'ASSISTANT';
 
 
+export const MAX_CHAT_MESSAGE_LENGTH = 2000;
 
 
 
@@ -37,7 +38,7 @@ export interface AssistantProfileInput {
   planningHorizon: 1 | 2 | 3;
   explanationDepth: 1 | 2 | 3;
 
-  
+
   topSixAffinity?: 1 | 2 | 3;
   captaincyStyle?: 1 | 2 | 3;
   transferFrequency?: 1 | 2 | 3;
@@ -134,8 +135,10 @@ export interface CompleteOnboardingInput {
   fixtureAwareness: 1 | 2 | 3;
 }
 
+
 export type StreamEvent =
   | { type: 'session'; sessionId: string }
+  | { type: 'meta';    primarySource: 'ML' | 'HEURISTIC' | 'ML_ONLY' | 'HEURISTIC_ONLY'; reason: string }
   | { type: 'delta';   content:   string }
   | { type: 'done' }
   | { type: 'error';   message:   string };

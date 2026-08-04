@@ -207,7 +207,7 @@ export default function DashboardPage() {
         fontFamily: "'DM Sans',sans-serif",
         minHeight: "100vh",
         background: "#060b14",
-        padding: "28px 28px 60px",
+        padding: "clamp(14px, 3vw, 28px) clamp(14px, 3vw, 28px) 60px",
         position: "relative",
       }}
     >
@@ -221,6 +221,28 @@ export default function DashboardPage() {
         .d2 { animation: fadeUp .5s .08s both; }
         .d3 { animation: fadeUp .5s .15s both; }
         .d4 { animation: fadeUp .5s .22s both; }
+
+        /* ── Responsive layout ── */
+        .d3 {
+          display: grid;
+          grid-template-columns: 1fr 1fr 340px;
+          gap: 16px;
+          align-items: start;
+        }
+        .d4 {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+          margin-top: 20px;
+        }
+
+        @media (max-width: 1100px) {
+          .d3 { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 760px) {
+          .d3 { grid-template-columns: 1fr; }
+          .d4 { grid-template-columns: repeat(2, 1fr); }
+        }
       `}</style>
 
       {/* Atmospheric orbs */}
@@ -385,15 +407,7 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Main 3-col grid ── */}
-            <div
-              className="d3"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 340px",
-                gap: 16,
-                alignItems: "start",
-              }}
-            >
+            <div className="d3">
               {/* Col 1: Squad */}
               <Panel>
                 <SLabel href="/app/team">My Squad</SLabel>
@@ -717,15 +731,7 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Quick nav ── */}
-            <div
-              className="d4"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
-                gap: 12,
-                marginTop: 20,
-              }}
-            >
+            <div className="d4">
               {[
                 {
                   href: "/app/team",

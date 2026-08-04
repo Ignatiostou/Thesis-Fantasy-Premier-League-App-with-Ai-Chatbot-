@@ -257,6 +257,7 @@ export default function SquadBuilderPage() {
 
   return (
     <div
+      className="sb-root"
       style={{
         fontFamily: "'Barlow Condensed','Impact',sans-serif",
         height: "100vh",
@@ -274,10 +275,69 @@ export default function SquadBuilderPage() {
         @keyframes shimmer{ 0%{background-position:200% 0} 100%{background-position:-200% 0} }
         .sk { background:linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.06) 50%,rgba(255,255,255,.03) 75%); background-size:200% 100%; animation:shimmer 1.4s infinite; border-radius:8px; }
         ::-webkit-scrollbar { width:3px } ::-webkit-scrollbar-thumb { background:rgba(255,255,255,.08);border-radius:2px }
+
+        /* ── Responsive: stack pitch above player list below 900px ── */
+        @media (max-width: 900px) {
+          .sb-root {
+            height: auto !important;
+            min-height: 100dvh;
+            overflow: visible !important;
+          }
+          .sb-body {
+            flex-direction: column !important;
+          }
+          .sb-pitchcol {
+            padding: 10px !important;
+          }
+          .sb-pitchcol > div > div {
+            min-height: clamp(400px, 55vh, 540px);
+          }
+          .sb-side {
+            width: 100% !important;
+            border-left: none !important;
+            border-top: 1px solid rgba(255,255,255,.07);
+          }
+          .sb-list {
+            max-height: 52vh;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .sb-topbar {
+            flex-wrap: wrap;
+            padding: 10px 12px !important;
+            gap: 10px !important;
+          }
+          .sb-stats {
+            width: 100%;
+            justify-content: space-between;
+            gap: 8px !important;
+          }
+          .sb-actions {
+            width: 100%;
+            flex-wrap: wrap;
+          }
+          .sb-actions input {
+            flex: 1;
+            min-width: 140px;
+          }
+          .sb-actions button {
+            flex: 1;
+            min-height: 44px;
+          }
+          .sbslot { width: 60px !important; }
+          .sbslot-circle {
+            width: 46px !important;
+            height: 46px !important;
+            font-size: 9px !important;
+          }
+          .sbslot-tag { max-width: 60px !important; padding: 2px 5px !important; }
+        }
       `}</style>
 
       {/* Top bar */}
       <div
+        className="sb-topbar"
         style={{
           display: "flex",
           alignItems: "center",
@@ -334,7 +394,7 @@ export default function SquadBuilderPage() {
         </div>
 
         {/* Budget + position counts */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div className="sb-stats" style={{ display: "flex", alignItems: "center", gap: 14 }}>
           {([1, 2, 3, 4] as const).map((pos) => (
             <div key={pos} style={{ textAlign: "center" }}>
               <div
@@ -426,7 +486,7 @@ export default function SquadBuilderPage() {
         </div>
 
         {/* Team name + submit */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="sb-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <input
             value={teamName}
             onChange={(e) => setTeamName(e.target.value)}
@@ -483,9 +543,10 @@ export default function SquadBuilderPage() {
       </div>
 
       {/* Main body */}
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+      <div className="sb-body" style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {/* Pitch */}
         <div
+          className="sb-pitchcol"
           style={{
             flex: 1,
             padding: "10px 10px 10px 16px",
@@ -499,6 +560,7 @@ export default function SquadBuilderPage() {
 
         {/* Sidebar */}
         <div
+          className="sb-side"
           style={{
             width: 300,
             flexShrink: 0,
@@ -606,7 +668,7 @@ export default function SquadBuilderPage() {
           </div>
 
           {/* Player list */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
+          <div className="sb-list" style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
             {loading
               ? [...Array(10)].map((_, i) => (
                   <div

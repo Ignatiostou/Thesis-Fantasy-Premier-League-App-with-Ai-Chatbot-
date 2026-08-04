@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 const WELCOME_SEEN_KEY = "fpl_welcome_seen_v1";
@@ -111,6 +111,20 @@ export default function WelcomeSlider() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, phase]);
 
+  // Swipe navigation on touch devices
+  const touchStartX = useRef<number | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 50) return;
+    if (dx < 0) next();
+    else prev();
+  };
+
   const slide = slides[displayed];
 
   const exitStyle: React.CSSProperties = {
@@ -166,6 +180,26 @@ export default function WelcomeSlider() {
         .fade-3 { animation: fadeUp 0.5s 0.3s both ease-out; }
         .fade-4 { animation: fadeUp 0.5s 0.4s both ease-out; }
         .fade-5 { animation: fadeUp 0.5s 0.5s both ease-out; }
+
+        /* ── Responsive: phones & small tablets ── */
+        @media (max-width: 760px) {
+          .ws-content {
+            flex-direction: column-reverse !important;
+            justify-content: center !important;
+            gap: 20px !important;
+            padding: 0 22px !important;
+            text-align: left;
+          }
+          .ws-icon .ws-ring { width: 150px !important; height: 150px !important; }
+          .ws-icon .ws-bubble { width: 110px !important; height: 110px !important; }
+          .ws-icon .ws-bubble span { font-size: 44px !important; }
+          .ws-header { padding: 18px 22px 10px !important; }
+          .ws-footer { padding: 14px 22px calc(22px + env(safe-area-inset-bottom, 0px)) !important; }
+        }
+
+        @media (max-width: 760px) and (max-height: 700px) {
+          .ws-icon { display: none !important; }
+        }
       `}</style>
 
       {/* Pitch lines background */}
@@ -209,6 +243,7 @@ export default function WelcomeSlider() {
 
       {/* Header */}
       <div
+        className="ws-header"
         style={{
           position: "relative",
           zIndex: 10,
@@ -266,6 +301,9 @@ export default function WelcomeSlider() {
 
       {/* Content */}
       <div
+        className="ws-content"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
         style={{
           position: "relative",
           zIndex: 10,
@@ -393,6 +431,7 @@ export default function WelcomeSlider() {
         {/* Right icon */}
         <div
           key={`icon-${displayed}`}
+          className="ws-icon"
           style={{
             flex: 1,
             display: "flex",
@@ -403,7 +442,7 @@ export default function WelcomeSlider() {
         >
           <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div
-              className="pulse-ring"
+              className="pulse-ring ws-ring"
               style={{
                 position: "absolute",
                 width: 260,
@@ -414,6 +453,7 @@ export default function WelcomeSlider() {
               }}
             />
             <div
+              className="ws-bubble"
               style={{
                 width: 180,
                 height: 180,
@@ -457,6 +497,7 @@ export default function WelcomeSlider() {
 
       {/* Footer nav */}
       <div
+        className="ws-footer"
         style={{
           position: "relative",
           zIndex: 10,

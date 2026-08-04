@@ -6,6 +6,9 @@ import { buildUserContext } from './context.service.js';
 
 type AuthRequest = Request & { userId?: string };
 
+
+const MAX_CHAT_MESSAGE_LENGTH = 2000; 
+
 function ok<T>(res: Response, data: T) {
   return res.json({ success: true, data });
 }
@@ -15,7 +18,7 @@ function fail(res: Response, status: number, error: string) {
 }
 
 const sendMessageSchema = z.object({
-  message: z.string().min(1).max(2000),
+  message: z.string().min(1).max(MAX_CHAT_MESSAGE_LENGTH),
   sessionId: z.string().optional(),
 });
 
@@ -131,8 +134,8 @@ export async function getSessionMessages(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return fail(res, 401, 'Unauthorized');
 
-    const sessionId = typeof req.params.sessionId === 'string' 
-      ? req.params.sessionId 
+    const sessionId = typeof req.params.sessionId === 'string'
+      ? req.params.sessionId
       : req.params.sessionId?.[0] ?? '';
     const messages = await aiService.getSessionMessages(req.userId, sessionId);
     return ok(res, {
@@ -153,8 +156,8 @@ export async function archiveSession(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return fail(res, 401, 'Unauthorized');
 
-    const sessionId = typeof req.params.sessionId === 'string' 
-      ? req.params.sessionId 
+    const sessionId = typeof req.params.sessionId === 'string'
+      ? req.params.sessionId
       : req.params.sessionId?.[0] ?? '';
     await aiService.archiveSession(req.userId, sessionId);
     return ok(res, { archived: true });
@@ -188,7 +191,7 @@ export async function chat(req: AuthRequest, res: Response) {
   } catch (e: any) {
     if (e.message === 'SESSION_NOT_FOUND') return fail(res, 404, 'Session not found');
     if (e.message === 'EMPTY_MESSAGE') return fail(res, 400, 'Message cannot be empty');
-    if (e.message === 'MESSAGE_TOO_LONG') return fail(res, 400, 'Message too long (max 2000 chars)');
+    if (e.message === 'MESSAGE_TOO_LONG') return fail(res, 400, `Message too long (max ${MAX_CHAT_MESSAGE_LENGTH} chars)`);
     console.error('[AI chat]', e);
     return fail(res, 500, e.message ?? 'Failed to get AI response');
   }
@@ -222,8 +225,17 @@ export async function chatStream(req: AuthRequest, res: Response) {
       message: parsed.data.message,
     });
 
-    for await (const delta of stream) {
-      res.write(`data: ${JSON.stringify({ type: 'delta', content: delta })}\n\n`);
+    
+    for await (const event of stream) {
+      if (event.kind === 'meta') {
+        res.write(`data: ${JSON.stringify({
+          type: 'meta',
+          primarySource: event.primarySource,
+          reason: event.reason,
+        })}\n\n`);
+      } else {
+        res.write(`data: ${JSON.stringify({ type: 'delta', content: event.text })}\n\n`);
+      }
     }
 
     res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);

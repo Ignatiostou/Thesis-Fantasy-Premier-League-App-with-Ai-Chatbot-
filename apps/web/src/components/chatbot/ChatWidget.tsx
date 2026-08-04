@@ -1,10 +1,9 @@
-
-
+// apps/web/src/components/chatbot/ChatWidget.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useChat }       from '@/lib/hooks/useChat';
-import { useOnboarding } from '@/lib/hooks/useOnboarding';
+import { useChat }        from '@/lib/hooks/useChat';
+import { useOnboarding }  from '@/lib/hooks/useOnboarding';
 import { OnboardingFlow } from './OnboardingFlow';
 import { ChatPanel }      from './ChatPanel';
 
@@ -54,8 +53,11 @@ export function ChatWidget() {
           to   { opacity: 1; transform: translateY(0)    scale(1);    }
         }
         @keyframes chatPulse {
-          0%,100% { transform: scale(1); }
-          50%     { transform: scale(1.08); }
+          0%,100% { transform: scale(1); opacity: 1; }
+          50%     { transform: scale(1.08); opacity: 0.7; }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
         .chat-widget-panel {
           animation: chatSlideUp 0.22s cubic-bezier(0.16,1,0.3,1) both;
@@ -70,19 +72,35 @@ export function ChatWidget() {
         .chat-fab:active {
           transform: scale(0.95);
         }
+
+        /* Phones: panel takes over the whole screen */
+        @media (max-width: 640px) {
+          .chat-widget-panel {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            height: 100dvh !important;
+            border-radius: 0 !important;
+            border: none !important;
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            z-index: 10000;
+          }
+        }
       `}</style>
 
       <div
+        className="chat-dock"
         style={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          zIndex: 9999,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-end',
-          gap: 12,
-          fontFamily: "'Barlow Condensed', 'Impact', sans-serif",
+          position:       'fixed',
+          bottom:         24,
+          right:          24,
+          zIndex:         9999,
+          display:        'flex',
+          flexDirection:  'column',
+          alignItems:     'flex-end',
+          gap:            12,
+          fontFamily:     "'Barlow Condensed', 'Impact', sans-serif",
         }}
       >
         {/* ── Panel ── */}
@@ -91,43 +109,42 @@ export function ChatWidget() {
             ref={panelRef}
             className="chat-widget-panel"
             style={{
-              width: 370,
-              height: 540,
+              width:        'min(370px, calc(100vw - 32px))',
+              height:       'min(560px, calc(100dvh - 120px))',
               borderRadius: 20,
-              background: '#0f1623',
-              border: '1px solid rgba(255,255,255,0.09)',
-              boxShadow: '0 24px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
+              background:   '#0f1623',
+              border:       '1px solid rgba(255,255,255,0.09)',
+              boxShadow:    '0 24px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)',
+              display:      'flex',
+              flexDirection:'column',
+              overflow:     'hidden',
             }}
           >
             {/* Header */}
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '14px 18px',
-                borderBottom: '1px solid rgba(255,255,255,0.07)',
-                background: 'rgba(0,255,135,0.04)',
-                flexShrink: 0,
+                display:         'flex',
+                alignItems:      'center',
+                justifyContent:  'space-between',
+                padding:         '13px 16px',
+                borderBottom:    '1px solid rgba(255,255,255,0.07)',
+                background:      'rgba(0,255,135,0.04)',
+                flexShrink:      0,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {/* Logo dot — matches your header "F" badge */}
                 <div
                   style={{
-                    width: 34,
-                    height: 34,
+                    width:        34,
+                    height:       34,
                     borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #00FF87 0%, #00d4ff 100%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 16,
-                    boxShadow: '0 0 16px rgba(0,255,135,0.3)',
-                    flexShrink: 0,
+                    background:   'linear-gradient(135deg, #00FF87 0%, #00d4ff 100%)',
+                    display:      'flex',
+                    alignItems:   'center',
+                    justifyContent:'center',
+                    fontSize:     16,
+                    boxShadow:    '0 0 16px rgba(0,255,135,0.3)',
+                    flexShrink:   0,
                   }}
                 >
                   ⚽
@@ -135,29 +152,29 @@ export function ChatWidget() {
                 <div>
                   <p
                     style={{
-                      color: 'white',
-                      fontSize: 15,
-                      fontWeight: 800,
-                      letterSpacing: '0.08em',
-                      textTransform: 'uppercase',
-                      margin: 0,
-                      lineHeight: 1,
+                      color:          'white',
+                      fontSize:       15,
+                      fontWeight:     800,
+                      letterSpacing:  '0.08em',
+                      textTransform:  'uppercase',
+                      margin:         0,
+                      lineHeight:     1,
                     }}
                   >
                     CoachBot
                   </p>
                   <p
                     style={{
-                      color: showOnboarding ? '#00FF87' : 'rgba(255,255,255,0.35)',
-                      fontSize: 10,
-                      fontFamily: "'Barlow', sans-serif",
-                      fontWeight: 500,
-                      letterSpacing: '0.15em',
-                      textTransform: 'uppercase',
-                      margin: '3px 0 0',
+                      color:          showOnboarding ? '#00FF87' : 'rgba(255,255,255,0.35)',
+                      fontSize:       10,
+                      fontFamily:     "'Barlow', sans-serif",
+                      fontWeight:     500,
+                      letterSpacing:  '0.15em',
+                      textTransform:  'uppercase',
+                      margin:         '3px 0 0',
                     }}
                   >
-                    {showOnboarding ? 'Profile Setup' : 'FPL Assistant'}
+                    {showOnboarding ? '✦ Profile Setup' : 'FPL Assistant'}
                   </p>
                 </div>
               </div>
@@ -168,21 +185,21 @@ export function ChatWidget() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <div
                       style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
+                        width:      6,
+                        height:     6,
+                        borderRadius:'50%',
                         background: '#00FF87',
-                        animation: 'chatPulse 2s ease-in-out infinite',
+                        animation:  'chatPulse 2s ease-in-out infinite',
                       }}
                     />
                     <span
                       style={{
-                        color: '#00FF87',
-                        fontSize: 9,
-                        fontWeight: 600,
-                        letterSpacing: '0.2em',
-                        textTransform: 'uppercase',
-                        fontFamily: "'Barlow', sans-serif",
+                        color:         '#00FF87',
+                        fontSize:       9,
+                        fontWeight:     600,
+                        letterSpacing:  '0.2em',
+                        textTransform:  'uppercase',
+                        fontFamily:     "'Barlow', sans-serif",
                       }}
                     >
                       Live
@@ -192,27 +209,29 @@ export function ChatWidget() {
                 <button
                   onClick={() => setIsOpen(false)}
                   style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 8,
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    background: 'rgba(255,255,255,0.05)',
-                    color: 'rgba(255,255,255,0.5)',
-                    fontSize: 18,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    lineHeight: 1,
-                    transition: 'background 0.15s, color 0.15s',
+                    width:       28,
+                    height:      28,
+                    borderRadius:8,
+                    border:      '1px solid rgba(255,255,255,0.1)',
+                    background:  'rgba(255,255,255,0.05)',
+                    color:       'rgba(255,255,255,0.5)',
+                    fontSize:    18,
+                    cursor:      'pointer',
+                    display:     'flex',
+                    alignItems:  'center',
+                    justifyContent:'center',
+                    lineHeight:  1,
+                    transition:  'background 0.15s, color 0.15s',
                   }}
                   onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.1)';
-                    (e.currentTarget as HTMLButtonElement).style.color = 'white';
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.background = 'rgba(255,255,255,0.1)';
+                    b.style.color = 'white';
                   }}
                   onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)';
-                    (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.5)';
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.background = 'rgba(255,255,255,0.05)';
+                    b.style.color = 'rgba(255,255,255,0.5)';
                   }}
                 >
                   ×
@@ -220,23 +239,25 @@ export function ChatWidget() {
               </div>
             </div>
 
-            {/* Accent line — matches your page top bar */}
+            {/* Accent line */}
             <div style={{ height: 2, background: 'linear-gradient(90deg, #00FF87, #00d4ff)', flexShrink: 0 }} />
 
             {/* Content */}
             <div style={{ flex: 1, overflow: 'hidden' }}>
               {statusLoading && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
                   <div
                     style={{
-                      width: 28,
-                      height: 28,
+                      width: 24, height: 24,
                       border: '2px solid rgba(0,255,135,0.2)',
                       borderTop: '2px solid #00FF87',
                       borderRadius: '50%',
                       animation: 'spin 0.7s linear infinite',
                     }}
                   />
+                  <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, fontFamily: "'Barlow', sans-serif", letterSpacing: '0.1em' }}>
+                    Loading…
+                  </span>
                 </div>
               )}
               {showOnboarding && <OnboardingFlow onComplete={() => onboarding.loadStatus()} />}
@@ -262,23 +283,23 @@ export function ChatWidget() {
             setHasUnread(false);
           }}
           style={{
-            width: 56,
-            height: 56,
+            width:        56,
+            height:       56,
             borderRadius: '50%',
-            border: 'none',
-            cursor: 'pointer',
-            position: 'relative',
-            background: isOpen
+            border:       'none',
+            cursor:       'pointer',
+            position:     'relative',
+            background:   isOpen
               ? 'rgba(255,255,255,0.08)'
               : 'linear-gradient(135deg, #00FF87 0%, #00d4ff 100%)',
-            boxShadow: isOpen
+            boxShadow:    isOpen
               ? '0 4px 16px rgba(0,0,0,0.4)'
               : '0 4px 24px rgba(0,255,135,0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: isOpen ? 22 : 24,
-            color: isOpen ? 'rgba(255,255,255,0.7)' : '#0a0e1a',
+            display:      'flex',
+            alignItems:   'center',
+            justifyContent:'center',
+            fontSize:     isOpen ? 22 : 24,
+            color:        isOpen ? 'rgba(255,255,255,0.7)' : '#0a0e1a',
           }}
           aria-label={isOpen ? 'Close CoachBot' : 'Open CoachBot'}
         >
@@ -288,15 +309,15 @@ export function ChatWidget() {
           {hasUnread && !isOpen && (
             <span
               style={{
-                position: 'absolute',
-                top: -2,
-                right: -2,
-                width: 14,
-                height: 14,
+                position:     'absolute',
+                top:          -2,
+                right:        -2,
+                width:        14,
+                height:       14,
                 borderRadius: '50%',
-                background: '#ef4444',
-                border: '2px solid #0a0e1a',
-                animation: 'chatPulse 1.5s ease-in-out infinite',
+                background:   '#ef4444',
+                border:       '2px solid #0a0e1a',
+                animation:    'chatPulse 1.5s ease-in-out infinite',
               }}
             />
           )}

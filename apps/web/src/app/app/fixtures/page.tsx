@@ -196,7 +196,7 @@ export default function FixturesPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "22px 32px 16px",
+          padding: "22px clamp(14px, 4vw, 32px) 16px",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -246,7 +246,7 @@ export default function FixturesPage() {
       {/* Title */}
       <div
         className="fade-2"
-        style={{ position: "relative", zIndex: 10, padding: "4px 32px 24px" }}
+        style={{ position: "relative", zIndex: 10, padding: "4px clamp(14px, 4vw, 32px) 24px" }}
       >
         <p
           style={{
@@ -281,7 +281,7 @@ export default function FixturesPage() {
         style={{
           position: "relative",
           zIndex: 10,
-          padding: "0 32px 24px",
+          padding: "0 clamp(14px, 4vw, 32px) 24px",
           display: "flex",
           flexDirection: "column",
           gap: 14,
@@ -364,7 +364,7 @@ export default function FixturesPage() {
           position: "relative",
           zIndex: 10,
           flex: 1,
-          padding: "0 32px 32px",
+          padding: "0 clamp(14px, 4vw, 32px) 32px",
         }}
       >
         {error && (
@@ -454,6 +454,7 @@ export default function FixturesPage() {
                       }}
                     >
                       <span
+                        className="fx-name"
                         style={{
                           color: "white",
                           fontSize: 15,
@@ -464,6 +465,7 @@ export default function FixturesPage() {
                         {f.teamH.name}
                       </span>
                       <span
+                        className="fx-short"
                         style={{
                           color: "#475569",
                           fontSize: 11,
@@ -479,6 +481,7 @@ export default function FixturesPage() {
 
                     {/* Score / time */}
                     <div
+                      className="fx-center"
                       style={{
                         width: 110,
                         textAlign: "center",
@@ -573,6 +576,7 @@ export default function FixturesPage() {
                       }}
                     >
                       <span
+                        className="fx-short"
                         style={{
                           color: "#475569",
                           fontSize: 11,
@@ -585,6 +589,7 @@ export default function FixturesPage() {
                         {f.teamA.shortName}
                       </span>
                       <span
+                        className="fx-name"
                         style={{
                           color: "white",
                           fontSize: 15,

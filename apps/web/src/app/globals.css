@@ -24,3 +24,34 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ── Mobile foundations ─────────────────────────────────────── */
+
+html,
+body {
+  /* Individual pages manage their own layout; never allow the
+     document itself to pan sideways on small screens. */
+  overflow-x: hidden;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+@media (max-width: 640px) {
+  /* iOS Safari zooms into inputs with font-size < 16px */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

@@ -1,8 +1,6 @@
-// apps/api/src/modules/ai/captaincy.service.ts
-
 import { prisma } from '../../db/prisma.js';
 import { getEditableGameweekId } from '../../utils/gameweek.js';
-import type { CaptainCandidateSummary } from './recommendation.types.js';
+import type { CaptainCandidateSummary, RecommendationExplanation } from './recommendation.types.js';
 
 const POSITION_LABEL: Record<number, string> = {
   1: 'GK',
@@ -78,7 +76,7 @@ export async function getCaptainRecommendations(
     }),
   ]);
 
-  const candidates: CaptainCandidateSummary[] = picks
+  const candidates = picks
     .filter((pick) => pick.player.position !== 1)  // exclude GKs
     .map((pick) => {
       const form             = safeNumber(pick.player.form, 0);
@@ -124,5 +122,22 @@ export async function getCaptainRecommendations(
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
 
-  return candidates;
+  
+  const withExplanations = candidates.map((c, i) => {
+    const runnerUp = i === 0 ? candidates[1] : candidates[0];
+    const explanation: RecommendationExplanation = {
+      upside: `Composite score ${c.score} (form × fixture × availability) — ${
+        c.reasons[0] ?? 'balanced profile across the scoring factors'
+      }`,
+      risk: c.risk.length ? c.risk.join('; ') : 'No material rotation or fitness risk identified',
+      horizon: 'GW1',
+      alternative: runnerUp
+        ? `${i === 0 ? 'Differential option' : 'Safer top pick'}: ${runnerUp.webName} (${runnerUp.club})`
+        : 'No alternative candidate available in the current squad',
+      confidence: c.risk.length === 0 ? 'HIGH' : c.risk.length === 1 ? 'MEDIUM' : 'LOW',
+    };
+    return { ...c, explanation };
+  });
+
+  return withExplanations;
 }

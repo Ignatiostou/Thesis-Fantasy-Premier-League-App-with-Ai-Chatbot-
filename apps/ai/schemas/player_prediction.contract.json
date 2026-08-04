@@ -1,0 +1,16 @@
+{
+  "description": "Shared contract for one player-prediction row. Kept in sync with schemas.PlayerPrediction (Python) and ml-prediction.types.ts (TypeScript) — tests/test_prediction_contract.py enforces the Python side.",
+  "table": "player_predictions",
+  "fields": {
+    "player_id":         { "type": "integer" },
+    "gameweek":          { "type": "integer" },
+    "predicted_pts_gw1": { "type": "number", "minimum": 0 },
+    "predicted_pts_gw3": { "type": "number", "minimum": 0 },
+    "predicted_pts_gw5": { "type": "number", "minimum": 0 },
+    "prob_playing":      { "type": "number", "minimum": 0, "maximum": 1 },
+    "prob_60_plus_mins": { "type": "number", "minimum": 0, "maximum": 1 },
+    "model_version":     { "type": "string" },
+    "confidence":        { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+    "generated_at":      { "type": "string", "format": "date-time" }
+  }
+}

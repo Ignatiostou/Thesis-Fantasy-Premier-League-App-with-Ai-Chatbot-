@@ -58,7 +58,7 @@ export default function PointsPage() {
         fontFamily: "'Barlow Condensed','Impact',sans-serif",
         minHeight: "100vh",
         background: "#0a0e1a",
-        padding: "22px 26px 48px",
+        padding: "clamp(14px, 3vw, 22px) clamp(14px, 3.5vw, 26px) 48px",
       }}
     >
 
@@ -338,6 +338,7 @@ export default function PointsPage() {
                   }}
                 >
                   <div
+                    className="ph-grid"
                     style={{
                       display: "grid",
                       gridTemplateColumns: "52px 1fr 68px 68px 68px",
@@ -369,6 +370,7 @@ export default function PointsPage() {
                     return (
                       <div
                         key={s.id}
+                        className="ph-grid"
                         style={{
                           display: "grid",
                           gridTemplateColumns: "52px 1fr 68px 68px 68px",

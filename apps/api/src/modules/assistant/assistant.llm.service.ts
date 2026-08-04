@@ -1,7 +1,6 @@
-// apps/api/src/modules/ai/assistant.llm.service.ts
-
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+import type { AssistantIntent } from '@fpl/types';
 
 export type SupportedLlmProvider = 'anthropic' | 'openai';
 
@@ -13,6 +12,29 @@ export interface LlmMessage {
 export interface GenerateReplyParams {
   systemPrompt: string;
   messages: LlmMessage[];
+  /** Drives factual-vs-conversational temperature selection. Optional for backwards compatibility. */
+  intent?: AssistantIntent;
+}
+
+
+const FACTUAL_INTENTS: ReadonlySet<AssistantIntent> = new Set([
+  'CAPTAINCY',
+  'TRANSFER_ADVICE',
+  'TRANSFER_EVALUATION',
+  'PLAYER_COMPARISON',
+  'BENCH_ORDER',
+  'FORMATION_ADVICE',
+  'CHIP_ADVICE',
+  'INITIAL_SQUAD',
+]);
+
+const FACTUAL_TEMPERATURE = 0.25;
+const CONVERSATIONAL_TEMPERATURE = 0.6;
+const DEFAULT_TEMPERATURE = 0.4; // used when no intent is supplied
+
+function resolveTemperature(intent?: AssistantIntent): number {
+  if (!intent) return DEFAULT_TEMPERATURE;
+  return FACTUAL_INTENTS.has(intent) ? FACTUAL_TEMPERATURE : CONVERSATIONAL_TEMPERATURE;
 }
 
 function getProvider(): SupportedLlmProvider {
@@ -44,11 +66,11 @@ function getOpenAIClient() {
 }
 
 function getAnthropicModel() {
-  return process.env.ANTHROPIC_MODEL ?? process.env.LLM_MODEL ?? 'claude-sonnet-4-20250514';
+  return process.env.ANTHROPIC_MODEL ?? process.env.LLM_MODEL ?? 'claude-opus-4-5';
 }
 
 function getOpenAIModel() {
-  return process.env.OPENAI_MODEL ?? process.env.LLM_MODEL ?? 'gpt-4.1-mini';
+  return process.env.OPENAI_MODEL ?? process.env.LLM_MODEL ?? 'gpt-4o-mini';
 }
 
 const DEFAULT_MAX_TOKENS = process.env.LLM_MAX_TOKENS ? parseInt(process.env.LLM_MAX_TOKENS, 10) : 3000;
@@ -66,10 +88,12 @@ export async function generateReply(params: GenerateReplyParams): Promise<string
 async function generateReplyWithAnthropic(params: GenerateReplyParams): Promise<string> {
   const anthropic = getAnthropicClient();
   const model = getAnthropicModel();
+  const temperature = resolveTemperature(params.intent);
 
   const response = await anthropic.messages.create({
     model,
     max_tokens: DEFAULT_MAX_TOKENS,
+    temperature,
     system: params.systemPrompt,
     messages: params.messages,
   });
@@ -90,6 +114,7 @@ async function generateReplyWithAnthropic(params: GenerateReplyParams): Promise<
 async function generateReplyWithOpenAI(params: GenerateReplyParams): Promise<string> {
   const openai = getOpenAIClient();
   const model = getOpenAIModel();
+  const temperature = resolveTemperature(params.intent);
 
   const response = await openai.responses.create({
     model,
@@ -101,6 +126,7 @@ async function generateReplyWithOpenAI(params: GenerateReplyParams): Promise<str
       })),
     ],
     max_output_tokens: DEFAULT_MAX_TOKENS,
+    temperature,
   });
 
   const replyText =
@@ -133,10 +159,12 @@ async function* generateReplyStreamWithAnthropic(
 ): AsyncGenerator<string> {
   const anthropic = getAnthropicClient();
   const model = getAnthropicModel();
+  const temperature = resolveTemperature(params.intent);
 
   const stream = await anthropic.messages.stream({
     model,
     max_tokens: DEFAULT_MAX_TOKENS,
+    temperature,
     system: params.systemPrompt,
     messages: params.messages,
   });
@@ -157,6 +185,7 @@ async function* generateReplyStreamWithOpenAI(
 ): AsyncGenerator<string> {
   const openai = getOpenAIClient();
   const model = getOpenAIModel();
+  const temperature = resolveTemperature(params.intent);
 
   const stream = await openai.responses.stream({
     model,
@@ -168,6 +197,7 @@ async function* generateReplyStreamWithOpenAI(
       })),
     ],
     max_output_tokens: DEFAULT_MAX_TOKENS,
+    temperature,
   });
 
   for await (const event of stream) {

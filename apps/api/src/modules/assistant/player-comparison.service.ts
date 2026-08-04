@@ -1,7 +1,5 @@
-// apps/api/src/modules/ai/player-comparison.service.ts
-
 import type { PlayerComparisonSimpleResult } from './recommendation.types.js';
-import { findMentionedPlayers } from './player-search.service.js';
+import { findMentionedPlayersDetailed } from './player-search.service.js';
 
 const POSITION_LABEL: Record<number, string> = {
   1: 'GK',
@@ -22,9 +20,25 @@ function safeForm(value: unknown): number | null {
 export async function compareMentionedPlayers(
   message: string,
 ): Promise<PlayerComparisonSimpleResult> {
-  const players = await findMentionedPlayers(message, 4);
+  // MODERATE: comparisons are informational (not a money-spending action),
+  // but we still don't want to compare someone who's clearly left the league.
+  const { players, excluded } = await findMentionedPlayersDetailed(message, 4, {
+    eligibilityMode: 'MODERATE',
+  });
 
   if (players.length < 2) {
+    // IMPROVEMENT #11: if we excluded someone, tell the manager why instead
+    // of a generic "could not identify two players" message.
+    if (excluded.length > 0) {
+      const names = excluded.map((e) => e.webName).join(', ');
+      return {
+        found: false,
+        players: [],
+        recommendation:
+          `I found a name match for ${names}, but they don't appear to be active in the Premier League right now ` +
+          `(${excluded[0].reasons.join('; ')}). Could you confirm the player, or pick someone else to compare?`,
+      };
+    }
     return {
       found: false,
       players: [],

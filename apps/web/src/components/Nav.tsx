@@ -14,6 +14,10 @@ const items = [
   { href: '/app/leagues',    label: 'Leagues',   icon: '🏆' },
 ];
 
+function isActive(pathname: string, href: string) {
+  return pathname === href || (href !== '/app' && pathname.startsWith(href));
+}
+
 export default function Nav() {
   const pathname = usePathname();
 
@@ -142,9 +146,11 @@ export default function Nav() {
           .fpl-nav-link { padding: 6px 11px; font-size: 11px; }
         }
 
+        /* Phones: links live in the bottom tab bar instead */
         @media (max-width: 640px) {
-          .fpl-nav-icon + span { display: none; }
-          .fpl-nav-link { padding: 6px 10px; }
+          .fpl-nav-links   { display: none; }
+          .fpl-nav-divider { display: none; }
+          .fpl-nav-logo-text { display: inline; font-size: 14px; }
         }
       `}</style>
 
@@ -160,9 +166,7 @@ export default function Nav() {
         {/* Centred links */}
         <div className="fpl-nav-links">
           {items.map((item) => {
-            const active =
-              pathname === item.href ||
-              (item.href !== '/app' && pathname.startsWith(item.href));
+            const active = isActive(pathname, item.href);
             return (
               <Link
                 key={item.href}
@@ -176,6 +180,106 @@ export default function Nav() {
           })}
         </div>
       </div>
+    </>
+  );
+}
+
+/**
+ * Fixed bottom tab bar shown on phones (≤640px). Rendered by AppShell
+ * outside the header so position:fixed is not trapped by the header's
+ * backdrop-filter containing block.
+ */
+export function MobileTabBar() {
+  const pathname = usePathname();
+
+  return (
+    <>
+      <style>{`
+        .fpl-tabbar {
+          display: none;
+        }
+
+        @media (max-width: 640px) {
+          .fpl-tabbar {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 60;
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            background: rgba(5, 9, 18, 0.97);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,.08);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+          }
+
+          .fpl-tab {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            min-height: 54px;
+            padding: 6px 2px;
+            text-decoration: none;
+            color: rgba(255,255,255,.45);
+            font-family: 'Barlow Condensed', Impact, sans-serif;
+            font-weight: 700;
+            font-size: 9.5px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            position: relative;
+            -webkit-tap-highlight-color: transparent;
+          }
+
+          .fpl-tab-icon {
+            font-size: 17px;
+            line-height: 1;
+          }
+
+          .fpl-tab.active {
+            color: ${ACCENT};
+          }
+
+          .fpl-tab.active::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 32px;
+            height: 2px;
+            border-radius: 2px;
+            background: ${ACCENT};
+          }
+
+          .fpl-tab.active .fpl-tab-icon {
+            filter: drop-shadow(0 0 6px ${ACCENT}99);
+          }
+
+          .fpl-tab:active {
+            background: rgba(255,255,255,.05);
+          }
+        }
+      `}</style>
+
+      <nav className="fpl-tabbar">
+        {items.map((item) => {
+          const active = isActive(pathname, item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`fpl-tab${active ? ' active' : ''}`}
+            >
+              <span className="fpl-tab-icon">{item.icon}</span>
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
     </>
   );
 }

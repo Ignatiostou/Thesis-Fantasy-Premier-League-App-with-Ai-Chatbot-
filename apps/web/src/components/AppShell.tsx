@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
-import Nav from './Nav';
+import Nav, { MobileTabBar } from './Nav';
 import { ChatWidget } from '@/components/chatbot/ChatWidget';
 
 const ACCENT = '#00FF87';
@@ -288,6 +288,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         @media (max-width: 640px) {
           .as-username { display: none; }
           .as-header   { padding: 0 14px; }
+          .as-divider  { display: none; }
+
+          /* Content must clear the fixed bottom tab bar */
+          .as-main {
+            padding-bottom: calc(54px + env(safe-area-inset-bottom, 0px));
+          }
+
+          /* Keep the chat dock (FAB) above the tab bar */
+          .chat-dock {
+            bottom: calc(66px + env(safe-area-inset-bottom, 0px)) !important;
+            right: 16px !important;
+          }
         }
       `}</style>
 
@@ -346,6 +358,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* ── Floating chat coach — renders on every app page ── */}
       <ChatWidget />
+
+      {/* ── Mobile bottom tab bar (phones only) ── */}
+      <MobileTabBar />
     </div>
   );
 }

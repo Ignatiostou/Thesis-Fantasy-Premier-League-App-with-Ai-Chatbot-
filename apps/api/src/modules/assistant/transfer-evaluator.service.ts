@@ -1,8 +1,7 @@
-// apps/api/src/modules/ai/transfer-evaluator.service.ts
-
 import { prisma }                from '../../db/prisma.js';
 import { getEditableGameweekId } from '../../utils/gameweek.js';
-import { findMentionedPlayers }  from './player-search.service.js';
+import { findMentionedPlayersDetailed } from './player-search.service.js';
+import { checkEligibility, buildEligibilitySnapshots } from './player-eligibility.service.js';
 import type { TransferEvaluationResult } from './recommendation.types.js';
 
 function getSellPriceFplProfitHalf(buyPrice: number, nowCost: number) {
@@ -44,9 +43,22 @@ export async function evaluateMentionedTransfer(
     };
   }
 
-  const mentioned = await findMentionedPlayers(message, 8);
+  
+  const { players: mentioned, excluded } = await findMentionedPlayersDetailed(message, 8, {
+    eligibilityMode: 'PERMISSIVE',
+  });
 
   if (!mentioned.length) {
+    if (excluded.length > 0) {
+      return {
+        detected: false,
+        outgoingPlayer: null,
+        incomingPlayer: null,
+        recommendation:
+          `I found a name match for ${excluded[0].webName}, but they don't appear to be active in the ` +
+          `Premier League right now (${excluded[0].reasons.join('; ')}), so I can't evaluate this transfer.`,
+      };
+    }
     return {
       detected: false,
       outgoingPlayer: null,
@@ -67,6 +79,22 @@ export async function evaluateMentionedTransfer(
       incomingPlayer: null,
       recommendation:
         'I could not clearly determine which player is going out and which one is coming in.',
+    };
+  }
+
+  // IMPROVEMENT #11: STRICT re-check on the INCOMING player specifically —
+  // this is the one we'd actually be recommending the manager spend on.
+  const incomingSnapshot = await buildEligibilitySnapshots([incomingMention.id]);
+  const incomingEligibility = checkEligibility(incomingSnapshot.get(incomingMention.id), 'STRICT');
+  if (!incomingEligibility.eligible) {
+    return {
+      detected: false,
+      outgoingPlayer: null,
+      incomingPlayer: null,
+      recommendation:
+        `${incomingMention.webName} doesn't pass the bar for a recommended transfer target right now ` +
+        `(${incomingEligibility.reasons.join('; ')}). I won't suggest spending budget on them — ` +
+        `let me know if you'd like an alternative.`,
     };
   }
 

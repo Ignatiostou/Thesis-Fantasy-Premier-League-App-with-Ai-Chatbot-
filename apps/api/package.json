@@ -6,6 +6,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "fpl:refresh": "tsx src/jobs/refreshFplData.job.ts",
@@ -26,8 +29,13 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/node": "^20.18.6",
+    "@types/supertest": "^7.2.0",
+    "@vitest/coverage-v8": "^4.1.5",
     "prisma": "^5.0.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.0",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^4.1.5"
   }
 }

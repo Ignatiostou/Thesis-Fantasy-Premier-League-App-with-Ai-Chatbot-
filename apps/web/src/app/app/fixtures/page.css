@@ -118,3 +118,32 @@
   background: #ef4444;
   animation: livePulse 1s ease-in-out infinite;
 }
+
+/* ── Responsive: phones ── */
+@media (max-width: 640px) {
+  /* Short club codes become the primary label */
+  .fx-name {
+    display: none;
+  }
+
+  .fx-short {
+    color: white !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    padding: 5px 10px !important;
+  }
+
+  .fx-center {
+    width: 84px !important;
+    padding: 0 4px !important;
+  }
+
+  .fixture-row {
+    padding: 12px 10px;
+  }
+
+  .gw-btn {
+    padding: 10px 14px;
+    min-height: 40px;
+  }
+}

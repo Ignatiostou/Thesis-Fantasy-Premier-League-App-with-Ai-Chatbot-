@@ -268,6 +268,10 @@ export async function previewTransfers(
     }
   }
 
+    if (errors.length > 0) {
+      return { ok: false, errors };
+    }
+
   const nextPicks = currentPicks.map((pick) => {
     const replacement = transfers.find((t) => t.outPlayerId === pick.playerId);
 

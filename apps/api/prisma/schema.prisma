@@ -93,6 +93,8 @@ model FplPlayer {
   transfersIn  UserTransfer[]       @relation("transferIn")
   transfersOut UserTransfer[]       @relation("transferOut")
 
+  predictions PlayerPrediction[]
+
   @@index([teamId])
   @@map("fpl_players")
 }
@@ -462,6 +464,10 @@ model AssistantSession {
   title       String?
   status      AssistantSessionStatus @default(ACTIVE)
 
+  conversationSummary    String?
+  summarisedMessageCount Int      @default(0)
+  summaryLastUpdatedAt   DateTime?
+
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
 
@@ -503,4 +509,27 @@ model RecommendationLog {
 
   @@index([userId, createdAt])
   @@index([sessionId])
+}
+
+model PlayerPrediction {
+  id Int @id @default(autoincrement())
+
+  playerId            Int      @map("player_id")
+  gameweek            Int
+  predictedPtsGw1     Float    @map("predicted_pts_gw1")
+  predictedPtsGw3     Float    @map("predicted_pts_gw3")
+  predictedPtsGw5     Float    @map("predicted_pts_gw5")
+  predictedMinutes    Float    @map("predicted_minutes")
+  probPlaying         Float    @map("prob_playing")
+  prob60PlusMins      Float    @map("prob_60_plus_mins")
+  modelVersion        String   @map("model_version")
+  confidence          String
+  generatedAt         DateTime @map("generated_at")
+
+  player              FplPlayer @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, gameweek, modelVersion])
+  @@index([playerId])
+  @@index([gameweek])
+  @@map("player_predictions")
 }

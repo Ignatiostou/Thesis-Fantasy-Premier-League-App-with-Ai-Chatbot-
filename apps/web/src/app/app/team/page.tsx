@@ -307,6 +307,7 @@ export default function MyTeamPage() {
 
   return (
     <div
+      className="team-root"
       style={{
         fontFamily: "'Barlow Condensed','Impact',sans-serif",
         height: "100vh",
@@ -352,7 +353,7 @@ export default function MyTeamPage() {
 
       {/* ── Top bar ── */}
       <div
-        className="anim-a"
+        className="anim-a team-topbar"
         style={{
           position: "relative",
           zIndex: 30,
@@ -472,6 +473,7 @@ export default function MyTeamPage() {
         </div>
 
         <div
+          className="team-actions"
           style={{
             display: "flex",
             alignItems: "center",
@@ -617,11 +619,12 @@ export default function MyTeamPage() {
 
       {/* ── Body ── */}
       <div
-        className="anim-b"
+        className="anim-b team-body"
         style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}
       >
         {/* Pitch */}
         <div
+          className="team-pitchcol"
           style={{
             flex: 1,
             display: "flex",
@@ -631,6 +634,7 @@ export default function MyTeamPage() {
           }}
         >
           <div
+            className="team-pitch"
             style={{
               flex: 1,
               position: "relative",
@@ -739,6 +743,7 @@ export default function MyTeamPage() {
 
         {/* Right panel */}
         <div
+          className="team-side"
           style={{
             width: 272,
             flexShrink: 0,
