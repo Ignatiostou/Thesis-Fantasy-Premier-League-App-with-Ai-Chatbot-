@@ -31,6 +31,10 @@ async function rawNameMatch(message: string, limit: number) {
 
   const players = await prisma.fplPlayer.findMany({
     where: {
+      // Excludes ids the FPL API no longer returns (e.g. a player reissued a
+      // new element id on transfer/season rollover) — the old id's row would
+      // otherwise be just as name-matchable as the current one.
+      isActiveInFpl: true,
       OR: tokens.flatMap((token) => [
         { webName: { contains: token, mode: 'insensitive' } },
         { firstName: { contains: token, mode: 'insensitive' } },

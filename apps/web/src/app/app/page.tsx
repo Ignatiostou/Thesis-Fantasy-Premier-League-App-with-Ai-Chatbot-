@@ -4,9 +4,10 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { defaultFixturesGw } from "@/lib/gameweek";
 import { useTeamGuard } from "@/lib/hooks/useTeamGuard";
 import { useCountdown } from "@/lib/hooks/useCountdown";
-import { ACCENT, GOLD, CHIP_DISPLAY } from "@/lib/constants";
+import { ACCENT, GOLD, CHIP_DISPLAY, currentSeasonLabel } from "@/lib/constants";
 import {
   FplEvent,
   FplFixture,
@@ -21,7 +22,7 @@ import Spinner from "@/components/ui/Spinner";
 import DeadlineHero from "@/features/dashboard/DeadlineHero";
 import StatCard from "@/features/dashboard/StatCard";
 import MiniPitch from "@/features/dashboard/MiniPitch";
-import FixtureRow from "@/features/dashboard/FixtureRow";
+import FixtureList from "@/features/dashboard/FixtureList";
 
 // ── Types local to this page ──────────────────────────────────────────────────
 
@@ -139,6 +140,10 @@ export default function DashboardPage() {
       const nextEvent = event
         ? (allEvents.find((e) => e.id === event.id + 1) ?? null)
         : (allEvents.find((e) => !e.finished) ?? null);
+      // isCurrent flips to the next GW as soon as the last match is
+      // data-checked, often the same night — well before the fixture list
+      // should stop showing yesterday's result. See lib/gameweek.ts.
+      const fixturesGw = defaultFixturesGw(allEvents) ?? event ?? nextEvent;
 
       const [teamRes, liveRes, stateRes, leaguesRes, fixturesRes] =
         await Promise.all([
@@ -146,10 +151,10 @@ export default function DashboardPage() {
           apiFetch<{ score: LiveScore }>("/points/me/live").catch(() => null),
           apiFetch<any>("/transfers/state").catch(() => null),
           apiFetch<{ items: League[] }>("/leagues/mine").catch(() => null),
-          event
-            ? apiFetch<FplFixture[]>(`/fpl/fixtures?event=${event.id}`).catch(
-                () => null,
-              )
+          fixturesGw
+            ? apiFetch<FplFixture[]>(
+                `/fpl/fixtures?event=${fixturesGw.id}`,
+              ).catch(() => null)
             : null,
         ]);
 
@@ -180,21 +185,25 @@ export default function DashboardPage() {
   const gwState = data?.gwState;
   const score = data?.score;
 
-  const deadlineIso = !gw?.finished
-    ? (gw?.deadlineTime ?? null)
-    : (nxt?.deadlineTime ?? null);
-  const deadlineLabel = !gw?.finished
-    ? `${gw?.name ?? "Gameweek"} Deadline`
-    : nxt?.name
-      ? `${nxt.name} Deadline`
-      : "Next Deadline";
+  // FPL flags no gameweek as "current" until the season is under way, so `gw`
+  // is null all pre-season. Everything that means "the gameweek in focus" falls
+  // back to the next unfinished one — otherwise the dashboard sat there with an
+  // empty fixture list and no countdown while GW1 was days away.
+  const focusGw = gw && !gw.finished ? gw : (nxt ?? gw);
+  const deadlineIso = focusGw?.deadlineTime ?? null;
+  const deadlineLabel = focusGw?.name
+    ? `${focusGw.name} Deadline`
+    : "Next Deadline";
 
   const remaining = Math.max(
     0,
     (gwState?.freeTransfers ?? 1) - (gwState?.transfersMade ?? 0),
   );
   const hits = gwState?.pointsHit ?? 0;
-  const budget = team ? `£${(team.budget / 10).toFixed(1)}m` : "—";
+  // Guarded: an absent budget used to divide through to NaN and render "£NaNm".
+  const budget = Number.isFinite(team?.budget)
+    ? `£${((team!.budget as number) / 10).toFixed(1)}m`
+    : "—";
 
   const topPlayers = (score?.breakdown ?? [])
     .filter((p) => !p.isOnBench)
@@ -225,9 +234,9 @@ export default function DashboardPage() {
         /* ── Responsive layout ── */
         .d3 {
           display: grid;
-          grid-template-columns: 1fr 1fr 340px;
+          grid-template-columns: 1.35fr 1fr 330px;
           gap: 16px;
-          align-items: start;
+          align-items: stretch;
         }
         .d4 {
           display: grid;
@@ -360,7 +369,7 @@ export default function DashboardPage() {
           <DeadlineHero
             iso={deadlineIso}
             label={deadlineLabel}
-            gwName={nxt?.name ?? gw?.name ?? ""}
+            gwName={focusGw?.name ?? ""}
           />
         </div>
 
@@ -383,7 +392,7 @@ export default function DashboardPage() {
                 value={score?.finalPoints ?? "—"}
                 accent
                 href="/app/points"
-                sub={gw?.name}
+                sub={focusGw?.name}
               />
               <StatCard
                 label="Free Transfers"
@@ -394,7 +403,7 @@ export default function DashboardPage() {
               <StatCard
                 label="Bank"
                 value={budget}
-                sub={team?.season ?? "2025-26"}
+                sub={team?.season ?? currentSeasonLabel(new Date(), "-")}
               />
               {hits > 0 && (
                 <StatCard
@@ -409,43 +418,33 @@ export default function DashboardPage() {
             {/* ── Main 3-col grid ── */}
             <div className="d3">
               {/* Col 1: Squad */}
-              <Panel>
+              <Panel
+                style={{
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
                 <SLabel href="/app/team">My Squad</SLabel>
-                <MiniPitch picks={team?.picks ?? []} />
+                {/* The panel stretches to the tallest column, so the pitch is
+                    centred in whatever room is left below the heading rather
+                    than clinging to the top of an over-tall card. */}
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                  }}
+                >
+                  <MiniPitch picks={team?.picks ?? []} />
+                </div>
               </Panel>
 
-              {/* Col 2: Fixtures + Live points */}
+              {/* Col 2: Live points + Leagues */}
               <div
-                style={{ display: "flex", flexDirection: "column", gap: 16 }}
+                style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}
               >
-                <Panel>
-                  <SLabel href="/app/fixtures">{`${gw?.name ?? "GW"} Fixtures`}</SLabel>
-                  {data?.fixtures?.length ? (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                      }}
-                    >
-                      {data.fixtures.slice(0, 7).map((f) => (
-                        <FixtureRow key={f.id} f={f} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        color: "rgba(255,255,255,.18)",
-                        fontSize: 12,
-                        textAlign: "center",
-                        padding: "16px 0",
-                      }}
-                    >
-                      No fixtures this gameweek
-                    </div>
-                  )}
-                </Panel>
-
                 <Panel>
                   <SLabel href="/app/points">Live Points</SLabel>
                   {topPlayers.length ? (
@@ -535,8 +534,10 @@ export default function DashboardPage() {
                       >
                         <span
                           style={{
-                            color: "rgba(255,255,255,.3)",
-                            fontSize: 10,
+                            color: "rgba(255,255,255,.68)",
+                            fontSize: 11.5,
+                            fontWeight: 600,
+                            letterSpacing: ".08em",
                           }}
                         >
                           GW Total
@@ -556,8 +557,8 @@ export default function DashboardPage() {
                   ) : (
                     <div
                       style={{
-                        color: "rgba(255,255,255,.18)",
-                        fontSize: 12,
+                        color: "rgba(255,255,255,.55)",
+                        fontSize: 12.5,
                         textAlign: "center",
                         padding: "16px 0",
                       }}
@@ -566,69 +567,10 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </Panel>
-              </div>
 
-              {/* Col 3: Transfers + Leagues */}
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 16 }}
-              >
-                <Panel>
-                  <SLabel href="/app/transfers">Transfers</SLabel>
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    {[
-                      {
-                        label: "Free Transfers",
-                        val: `${remaining} remaining`,
-                        col: remaining > 0 ? ACCENT : "rgba(255,255,255,.4)",
-                      },
-                      {
-                        label: "Transfers Made",
-                        val: gwState?.transfersMade ?? 0,
-                        col: "rgba(255,255,255,.7)",
-                      },
-                      {
-                        label: "Points Hit",
-                        val: hits > 0 ? `−${hits} pts` : "None",
-                        col: hits > 0 ? "#ef4444" : "rgba(255,255,255,.25)",
-                      },
-                      {
-                        label: "Bank",
-                        val: budget,
-                        col: "rgba(255,255,255,.7)",
-                      },
-                    ].map(({ label, val, col }, i, arr) => (
-                      <div
-                        key={label}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "11px 0",
-                          borderBottom:
-                            i < arr.length - 1
-                              ? "1px solid rgba(255,255,255,.04)"
-                              : "none",
-                        }}
-                      >
-                        <span
-                          style={{
-                            color: "rgba(255,255,255,.28)",
-                            fontSize: 11,
-                          }}
-                        >
-                          {label}
-                        </span>
-                        <span
-                          style={{ color: col, fontSize: 14, fontWeight: 700 }}
-                        >
-                          {val}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </Panel>
-
-                <Panel>
+                <Panel
+                  style={{ flex: 1, display: "flex", flexDirection: "column" }}
+                >
                   <SLabel href="/app/leagues">Leagues</SLabel>
                   {data?.leagues?.length ? (
                     <div
@@ -696,11 +638,20 @@ export default function DashboardPage() {
                       ))}
                     </div>
                   ) : (
-                    <div style={{ textAlign: "center", padding: "8px 0 4px" }}>
+                    <div
+                      style={{
+                        textAlign: "center",
+                        padding: "8px 0 4px",
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                      }}
+                    >
                       <div
                         style={{
-                          color: "rgba(255,255,255,.18)",
-                          fontSize: 12,
+                          color: "rgba(255,255,255,.55)",
+                          fontSize: 12.5,
                           marginBottom: 12,
                         }}
                       >
@@ -726,6 +677,87 @@ export default function DashboardPage() {
                       </Link>
                     </div>
                   )}
+                </Panel>
+              </div>
+
+              {/* Col 3: Fixtures + Transfers */}
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}
+              >
+                <Panel>
+                  <SLabel href="/app/fixtures">{`${focusGw?.name ?? "GW"} Fixtures`}</SLabel>
+                  {data?.fixtures?.length ? (
+                    <FixtureList fixtures={data.fixtures} limit={7} />
+                  ) : (
+                    <div
+                      style={{
+                        color: "rgba(255,255,255,.55)",
+                        fontSize: 12.5,
+                        textAlign: "center",
+                        padding: "16px 0",
+                      }}
+                    >
+                      No fixtures this gameweek
+                    </div>
+                  )}
+                </Panel>
+
+                <Panel style={{ flex: 1 }}>
+                  <SLabel href="/app/transfers">Transfers</SLabel>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    {[
+                      {
+                        label: "Free Transfers",
+                        val: `${remaining} remaining`,
+                        col: remaining > 0 ? ACCENT : "rgba(255,255,255,.72)",
+                      },
+                      {
+                        label: "Transfers Made",
+                        val: gwState?.transfersMade ?? 0,
+                        col: "#e8f1f7",
+                      },
+                      {
+                        label: "Points Hit",
+                        val: hits > 0 ? `−${hits} pts` : "None",
+                        col: hits > 0 ? "#ef4444" : "rgba(255,255,255,.55)",
+                      },
+                      {
+                        label: "Bank",
+                        val: budget,
+                        col: "#e8f1f7",
+                      },
+                    ].map(({ label, val, col }, i, arr) => (
+                      <div
+                        key={label}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "11px 0",
+                          borderBottom:
+                            i < arr.length - 1
+                              ? "1px solid rgba(255,255,255,.04)"
+                              : "none",
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: "rgba(255,255,255,.66)",
+                            fontSize: 12,
+                            fontWeight: 500,
+                            letterSpacing: ".02em",
+                          }}
+                        >
+                          {label}
+                        </span>
+                        <span
+                          style={{ color: col, fontSize: 15, fontWeight: 700 }}
+                        >
+                          {val}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </Panel>
               </div>
             </div>
@@ -780,7 +812,7 @@ export default function DashboardPage() {
                       {label}
                     </div>
                     <div
-                      style={{ color: "rgba(255,255,255,.25)", fontSize: 10 }}
+                      style={{ color: "rgba(255,255,255,.58)", fontSize: 11 }}
                     >
                       {desc}
                     </div>

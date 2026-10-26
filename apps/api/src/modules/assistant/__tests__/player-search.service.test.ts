@@ -6,6 +6,22 @@ vi.mock('../../../db/prisma.js', () => ({
   },
 }));
 
+// findMentionedPlayers runs every name-matched candidate through the
+// eligibility gate (buildEligibilitySnapshots + checkEligibility), which
+// needs its own DB queries (fplEvent, playerGameweekStat) unrelated to what
+// this file tests (tokenizing/ranking). Mock it out so every candidate the
+// name-match query returns is treated as eligible, keeping these tests
+// focused on ranking behaviour rather than eligibility-DB shape.
+vi.mock('../player-eligibility.service.js', () => ({
+  buildEligibilitySnapshots: vi.fn((ids: number[]) =>
+    new Map(ids.map((id) => [id, {
+      playerId: id, status: 'a', chanceOfPlayingNextRound: 100,
+      minutesLast3Gw: 90, appearsInRecentGw: true, teamId: 1, position: 3,
+    }])),
+  ),
+  checkEligibility: vi.fn().mockReturnValue({ eligible: true, reasons: [] }),
+}));
+
 import { prisma } from '../../../db/prisma.js';
 import { findMentionedPlayers } from '../player-search.service.js';
 

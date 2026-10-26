@@ -15,7 +15,7 @@ export default function StandingsTable({ standings, myUserId }: Props) {
       {/* Header */}
       <div className="st-grid" style={{ display: "grid", gridTemplateColumns: "36px 1fr 1fr 70px 70px", gap: 8, padding: "10px 16px", background: "rgba(255,255,255,.025)", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
         {["#", "Manager", "Team", "GW", "Total"].map((h, i) => (
-          <div key={h} style={{ color: "rgba(255,255,255,.28)", fontSize: 8, fontWeight: 700, letterSpacing: ".15em", textTransform: "uppercase", fontFamily: "'Barlow',sans-serif", textAlign: i > 1 ? "right" : "left" }}>
+          <div key={h} style={{ color: "rgba(255,255,255,.6)", fontSize: 10, fontWeight: 700, letterSpacing: ".15em", textTransform: "uppercase", fontFamily: "'Barlow',sans-serif", textAlign: i > 1 ? "right" : "left" }}>
             {h}
           </div>
         ))}
@@ -31,8 +31,8 @@ export default function StandingsTable({ standings, myUserId }: Props) {
             background: isMe ? `${ACCENT}07` : "transparent", alignItems: "center",
           }}>
             <div style={{
-              color: row.rank <= 3 ? ["#f59e0b", "#94a3b8", "#b45309"][row.rank - 1] : "rgba(255,255,255,.35)",
-              fontSize: row.rank <= 3 ? 13 : 11, fontWeight: 900,
+              color: row.rank <= 3 ? ["#f59e0b", "#94a3b8", "#b45309"][row.rank - 1] : "rgba(255,255,255,.65)",
+              fontSize: row.rank <= 3 ? 13 : 12, fontWeight: 900,
             }}>
               {row.rank <= 3 ? ["🥇", "🥈", "🥉"][row.rank - 1] : row.rank}
             </div>
@@ -44,10 +44,10 @@ export default function StandingsTable({ standings, myUserId }: Props) {
               </span>
             </div>
 
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontFamily: "'Barlow',sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "right" }}>
+            <div style={{ color: "rgba(255,255,255,.68)", fontSize: 11, fontFamily: "'Barlow',sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "right" }}>
               {row.teamName}
             </div>
-            <div style={{ color: "rgba(255,255,255,.5)", fontSize: 12, fontWeight: 700, textAlign: "right", fontFamily: "'Barlow',sans-serif" }}>
+            <div style={{ color: "rgba(255,255,255,.78)", fontSize: 12, fontWeight: 700, textAlign: "right", fontFamily: "'Barlow',sans-serif" }}>
               {row.latestGwPoints}
             </div>
             <div style={{ color: isMe ? ACCENT : "rgba(255,255,255,.88)", fontSize: 14, fontWeight: 900, textAlign: "right" }}>

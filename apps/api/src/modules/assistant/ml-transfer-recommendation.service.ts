@@ -187,6 +187,10 @@ export function recommendTransfersFromMl(params: {
       const risk = transferRisk(incoming);
       const r = computeTransferScore(outgoing, incoming, ctx);
 
+      // A positive GW3 delta alone can hide a loss over the preferred horizon.
+      // Only present moves with a positive, finite personalised score.
+      if (!Number.isFinite(r.total) || r.total <= 0) continue;
+
       candidates.push({
         outgoing, incoming,
         deltaGw1, deltaGw3, deltaGw5,

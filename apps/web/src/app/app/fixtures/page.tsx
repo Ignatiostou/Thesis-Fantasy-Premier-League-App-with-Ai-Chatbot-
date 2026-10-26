@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
+import { formatDayLabel } from "@/lib/dates";
+import { defaultFixturesGw } from "@/lib/gameweek";
 import "./page.css";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -28,6 +30,7 @@ interface FplFixture {
   teamHScore: number | null;
   teamAScore: number | null;
   finished: boolean | null;
+  finishedProvisional: boolean | null;
   started: boolean | null;
   teamH: FplTeam;
   teamA: FplTeam;
@@ -40,11 +43,7 @@ function groupByDate(fixtures: FplFixture[]): Map<string, FplFixture[]> {
   const map = new Map<string, FplFixture[]>();
   for (const f of fixtures) {
     const key = f.kickoffTime
-      ? new Date(f.kickoffTime).toLocaleDateString("en-GB", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-        })
+      ? formatDayLabel(new Date(f.kickoffTime), "long")
       : "Date TBC";
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(f);
@@ -71,8 +70,7 @@ export default function FixturesPage() {
       .then(([evts, tms]) => {
         setEvents(evts);
         setTeams(tms);
-        const current = evts.find((e) => e.isCurrent);
-        setSelectedGw(current?.id ?? evts[0]?.id ?? null);
+        setSelectedGw(defaultFixturesGw(evts)?.id ?? null);
       })
       .catch((e: Error) => setError(e.message));
   }, []);
@@ -346,8 +344,8 @@ export default function FixturesPage() {
 
           <span
             style={{
-              color: "#475569",
-              fontSize: 11,
+              color: "#94a3b8",
+              fontSize: 12,
               fontFamily: "'Barlow',sans-serif",
               marginLeft: "auto",
             }}
@@ -420,9 +418,9 @@ export default function FixturesPage() {
               >
                 <span
                   style={{
-                    color: "#94a3b8",
-                    fontSize: 11,
-                    fontWeight: 600,
+                    color: "rgba(255,255,255,.72)",
+                    fontSize: 11.5,
+                    fontWeight: 700,
                     letterSpacing: "0.2em",
                     textTransform: "uppercase",
                     fontFamily: "'Barlow',sans-serif",
@@ -435,7 +433,8 @@ export default function FixturesPage() {
                   style={{
                     flex: 1,
                     height: 1,
-                    background: "rgba(255,255,255,.06)",
+                    background:
+                      "linear-gradient(90deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,0) 100%)",
                   }}
                 />
               </div>
@@ -489,7 +488,7 @@ export default function FixturesPage() {
                         padding: "0 8px",
                       }}
                     >
-                      {f.finished ? (
+                      {f.finished || f.finishedProvisional ? (
                         <div
                           style={{
                             display: "flex",
@@ -551,8 +550,8 @@ export default function FixturesPage() {
                       ) : (
                         <span
                           style={{
-                            color: "#64748b",
-                            fontSize: 12,
+                            color: "#cbd5e1",
+                            fontSize: 13,
                             fontFamily: "'Barlow',sans-serif",
                           }}
                         >

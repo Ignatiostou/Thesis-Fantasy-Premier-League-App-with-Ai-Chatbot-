@@ -330,6 +330,22 @@ export function useTransfersState() {
       setSearch("");
       setTeamFilter(0);
       setPage(1);
+    } catch (e: unknown) {
+      // Without this the rejection was swallowed and the button simply went
+      // back to idle — the transfer looked like it had been ignored. Reuse the
+      // preview error slot so the reason lands in the panel the user is
+      // already looking at, with the cart left intact to retry.
+      const body = (e as { body?: TransferPreviewResponse })?.body;
+      setPreview(
+        body?.errors
+          ? body
+          : {
+              ok: false,
+              errors: [
+                e instanceof Error ? e.message : "Transfer failed",
+              ],
+            },
+      );
     } finally {
       setCommitting(false);
     }

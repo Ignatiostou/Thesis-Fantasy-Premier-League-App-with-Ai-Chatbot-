@@ -59,15 +59,17 @@ export async function refreshFplData(): Promise<SyncSummary> {
 
 
   const apiPlayerIds = new Set<number>((bootstrap.elements as any[]).map((p) => p.id));
-  const dbPlayerIds = await prisma.fplPlayer.findMany({ select: { id: true, webName: true } });
-  const goneFromApi = dbPlayerIds.filter((p) => !apiPlayerIds.has(p.id));
+  const dbPlayerIds = await prisma.fplPlayer.findMany({ select: { id: true, webName: true, isActiveInFpl: true } });
+  const goneFromApi = dbPlayerIds.filter((p) => !apiPlayerIds.has(p.id) && p.isActiveInFpl);
   if (goneFromApi.length > 0) {
+    await prisma.fplPlayer.updateMany({
+      where: { id: { in: goneFromApi.map((p) => p.id) } },
+      data:  { isActiveInFpl: false },
+    });
     console.warn(
-      `[FPL]   ⚠ ${goneFromApi.length} player(s) in our DB no longer appear in the FPL API response ` +
-      `(likely released/retired): ${goneFromApi.slice(0, 10).map((p) => p.webName).join(', ')}` +
-      `${goneFromApi.length > 10 ? '…' : ''}. They are NOT deleted (FK history), but ` +
-      `player-eligibility.service.ts should exclude them from recommendations once their recent-GW ` +
-      `appearance window expires.`,
+      `[FPL]   ⚠ ${goneFromApi.length} player(s) in our DB no longer appear in the FPL API response — ` +
+      `marked inactive: ${goneFromApi.slice(0, 10).map((p) => p.webName).join(', ')}` +
+      `${goneFromApi.length > 10 ? '…' : ''}.`,
     );
   }
 
@@ -155,6 +157,7 @@ async function syncPlayers(players: any[]): Promise<number> {
             bonus:                     p.bonus        ?? null,
             selectedByPercent:         p.selected_by_percent ? parseFloat(p.selected_by_percent) : null,
             form:                      p.form ? parseFloat(p.form) : null,
+            isActiveInFpl:             true,
             raw:                       p,
           },
           update: {
@@ -174,6 +177,10 @@ async function syncPlayers(players: any[]): Promise<number> {
             bonus:                     p.bonus        ?? null,
             selectedByPercent:         p.selected_by_percent ? parseFloat(p.selected_by_percent) : null,
             form:                      p.form ? parseFloat(p.form) : null,
+            // Present in this sync's API response — reactivate in case a
+            // previously-inactive id somehow reappears (e.g. re-registered
+            // mid-season), same as every other field above being refreshed.
+            isActiveInFpl:             true,
             raw:                       p,
           },
         }),

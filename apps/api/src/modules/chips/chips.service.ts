@@ -147,7 +147,11 @@ export async function playChip(userId: string, chip: ChipType) {
   await prisma.$transaction(async (tx) => {
     await tx.userGameweekState.update({
       where: { userTeamId_gameweek: { userTeamId: team.id, gameweek } },
-      data: { activeChip: chip },
+      data: {
+        activeChip: chip,
+        // Only Free Hit reverts, so only Free Hit needs the bank remembered.
+        budgetBeforeChip: chip === ChipType.FREE_HIT ? team.budget : null,
+      },
     });
 
     await tx.userChip.create({

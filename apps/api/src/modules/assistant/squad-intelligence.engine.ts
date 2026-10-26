@@ -424,6 +424,7 @@ async function _analyseWeakLinks(
       const positionCode = wl.pick.player.position;
       const candidates   = await prisma.fplPlayer.findMany({
         where: {
+          isActiveInFpl: true,
           position: positionCode,
           status:   'a',
           form:     { gt: 0 },

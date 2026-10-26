@@ -88,6 +88,52 @@ export function ChatPanel({ messages, isStreaming, error, onSend, onStop, onNewC
         .chat-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
         .chat-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
+        /* ── Tables inside an assistant answer ──
+           The panel is narrower than a seven-column player table, so the table
+           scrolls sideways inside its own frame rather than squeezing every
+           column down to an unreadable width. */
+        .chat-table-wrap {
+          margin: 8px 0 12px;
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 10px;
+          background: rgba(255,255,255,0.02);
+          overflow-x: auto;
+          overflow-y: hidden;
+          -webkit-overflow-scrolling: touch;
+        }
+        .chat-table-wrap::-webkit-scrollbar { height: 5px; }
+        .chat-table-wrap::-webkit-scrollbar-track { background: transparent; }
+        .chat-table-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 99px; }
+        .chat-table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(0,255,135,0.35); }
+
+        .chat-table {
+          border-collapse: collapse;
+          width: 100%;
+          font-family: 'Barlow', sans-serif;
+          font-size: 11.5px;
+        }
+        .chat-table th {
+          padding: 7px 10px;
+          background: rgba(255,255,255,0.04);
+          border-bottom: 1px solid rgba(255,255,255,0.09);
+          color: rgba(255,255,255,0.5);
+          font-family: 'Barlow Condensed', sans-serif;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.09em;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+        .chat-table td {
+          padding: 6px 10px;
+          border-top: 1px solid rgba(255,255,255,0.05);
+          color: rgba(255,255,255,0.78);
+          line-height: 1.45;
+        }
+        .chat-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
+        .chat-table tbody tr:hover           { background: rgba(0,255,135,0.05); }
+        .chat-table td:first-child           { color: rgba(255,255,255,0.95); font-weight: 600; }
+
         .quick-prompt {
           transition: all 0.15s ease;
         }
@@ -116,6 +162,8 @@ export function ChatPanel({ messages, isStreaming, error, onSend, onStop, onNewC
           color: #00FF87 !important;
         }
         .new-chat-btn { transition: all 0.15s ease; }
+
+        textarea::placeholder { color: rgba(255,255,255,0.5); }
       `}</style>
 
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: "'Barlow', sans-serif" }}>
@@ -144,7 +192,7 @@ export function ChatPanel({ messages, isStreaming, error, onSend, onStop, onNewC
             />
             <span
               style={{
-                color: 'rgba(255,255,255,0.3)',
+                color: 'rgba(255,255,255,0.62)',
                 fontSize: 10,
                 letterSpacing: '0.15em',
                 textTransform: 'uppercase',
@@ -163,7 +211,7 @@ export function ChatPanel({ messages, isStreaming, error, onSend, onStop, onNewC
               background: 'none',
               border: '1px solid rgba(255,255,255,0.1)',
               borderRadius: 8,
-              color: 'rgba(255,255,255,0.35)',
+              color: 'rgba(255,255,255,0.68)',
               fontSize: 10,
               fontFamily: "'Barlow Condensed', sans-serif",
               fontWeight: 600,
@@ -225,7 +273,7 @@ export function ChatPanel({ messages, isStreaming, error, onSend, onStop, onNewC
                 >
                   Your Coach is Ready
                 </p>
-                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, lineHeight: 1.5, margin: 0 }}>
+                <p style={{ color: 'rgba(255,255,255,0.62)', fontSize: 11, lineHeight: 1.5, margin: 0 }}>
                   Ask anything about your FPL squad
                 </p>
               </div>
@@ -244,7 +292,7 @@ export function ChatPanel({ messages, isStreaming, error, onSend, onStop, onNewC
                       borderRadius: 10,
                       border: '1px solid rgba(255,255,255,0.07)',
                       background: 'rgba(255,255,255,0.03)',
-                      color: 'rgba(255,255,255,0.55)',
+                      color: 'rgba(255,255,255,0.75)',
                       fontSize: 12,
                       fontFamily: "'Barlow', sans-serif",
                       cursor: 'pointer',
@@ -260,8 +308,8 @@ export function ChatPanel({ messages, isStreaming, error, onSend, onStop, onNewC
                     </div>
                     <span
                       style={{
-                        fontSize: 9,
-                        color: 'rgba(255,255,255,0.2)',
+                        fontSize: 10,
+                        color: 'rgba(255,255,255,0.55)',
                         fontFamily: "'Barlow Condensed', sans-serif",
                         letterSpacing: '0.1em',
                         textTransform: 'uppercase',
@@ -295,7 +343,7 @@ export function ChatPanel({ messages, isStreaming, error, onSend, onStop, onNewC
                         background: copiedId === msg.id ? 'rgba(0,255,135,0.15)' : 'rgba(255,255,255,0.06)',
                         border: `1px solid ${copiedId === msg.id ? 'rgba(0,255,135,0.3)' : 'rgba(255,255,255,0.1)'}`,
                         borderRadius: 6,
-                        color: copiedId === msg.id ? '#00FF87' : 'rgba(255,255,255,0.35)',
+                        color: copiedId === msg.id ? '#00FF87' : 'rgba(255,255,255,0.68)',
                         fontSize: 10,
                         fontFamily: "'Barlow Condensed', sans-serif",
                         letterSpacing: '0.1em',
@@ -431,8 +479,8 @@ export function ChatPanel({ messages, isStreaming, error, onSend, onStop, onNewC
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 5 }}>
             <p
               style={{
-                color: 'rgba(255,255,255,0.12)',
-                fontSize: 9,
+                color: 'rgba(255,255,255,0.45)',
+                fontSize: 10,
                 fontFamily: "'Barlow', sans-serif",
                 letterSpacing: '0.1em',
                 margin: 0,

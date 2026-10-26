@@ -61,6 +61,10 @@ def fetch_all_player_histories() -> list[dict]:
     """One element-summary request per player; returns upsert-ready stat rows."""
     bootstrap = get_bootstrap()
     player_ids = [el["id"] for el in bootstrap["elements"]]
+    # Club per player, straight from the same bootstrap payload, so each stat
+    # row records the team it actually belongs to rather than relying on a
+    # current-state join later.
+    team_of = {int(el["id"]): int(el["team"]) for el in bootstrap["elements"] if el.get("team")}
     logger.info("Fetching per-GW history for %d players from the FPL API "
                 "(%d parallel workers)...", len(player_ids), FETCH_WORKERS)
 
@@ -71,7 +75,7 @@ def fetch_all_player_histories() -> list[dict]:
     def fetch_one(pid: int) -> list[dict]:
         time.sleep(POLITENESS_DELAY_S)
         summary = get_element_summary(pid)
-        return rows_from_history(pid, summary.get("history") or [])
+        return rows_from_history(pid, summary.get("history") or [], team_id=team_of.get(pid))
 
     with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as pool:
         futures = {pool.submit(fetch_one, pid): pid for pid in player_ids}

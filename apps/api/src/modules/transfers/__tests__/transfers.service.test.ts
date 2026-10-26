@@ -187,6 +187,91 @@ describe('previewTransfers', () => {
     expect((result as any).errors).toContain('BUDGET_EXCEEDED');
   });
 
+  it('rejects a transfer that would put a 4th player from one club in the squad', async () => {
+    // Three midfielders already share club 17.
+    const squad = [...BASE_SQUAD];
+    squad[8] = makePick(makePlayer(9, 3, 17, 80));
+    squad[9] = makePick(makePlayer(10, 3, 17, 80));
+
+    mock.userTeam.findUnique.mockResolvedValue({
+      id: 'team-1',
+      name: 'My Team',
+      budget: 200,
+      season: '2025-26',
+      picks: squad,
+    });
+
+    mock.fplPlayer.findMany.mockResolvedValue([
+      squad[10].player,
+      makePlayer(20, 3, 17, 80),
+    ]);
+
+    const result = await previewTransfers('user-1', [
+      { outPlayerId: 11, inPlayerId: 20 },
+    ]);
+
+    expect(result.ok).toBe(false);
+    expect((result as any).errors).toContain('MAX_3_PER_CLUB:17');
+  });
+
+  describe('when a player moved club and left the squad over the limit', () => {
+    // Four midfielders share club 17 — a state the manager never chose.
+    const drifted = [...BASE_SQUAD];
+    drifted[8] = makePick(makePlayer(9, 3, 17, 80));
+    drifted[9] = makePick(makePlayer(10, 3, 17, 80));
+    drifted[10] = makePick(makePlayer(11, 3, 17, 80));
+
+    beforeEach(() => {
+      mock.userTeam.findUnique.mockResolvedValue({
+        id: 'team-1',
+        name: 'My Team',
+        budget: 200,
+        season: '2025-26',
+        picks: drifted,
+      });
+    });
+
+    it('allows an unrelated transfer instead of locking the manager out', async () => {
+      mock.fplPlayer.findMany.mockResolvedValue([
+        drifted[11].player,
+        makePlayer(20, 3, 30, 80),
+      ]);
+
+      const result = await previewTransfers('user-1', [
+        { outPlayerId: 12, inPlayerId: 20 },
+      ]);
+
+      expect(result.ok).toBe(true);
+    });
+
+    it('allows a transfer that brings the club back under the limit', async () => {
+      mock.fplPlayer.findMany.mockResolvedValue([
+        drifted[8].player,
+        makePlayer(20, 3, 30, 80),
+      ]);
+
+      const result = await previewTransfers('user-1', [
+        { outPlayerId: 9, inPlayerId: 20 },
+      ]);
+
+      expect(result.ok).toBe(true);
+    });
+
+    it('still rejects a transfer that makes the breach worse', async () => {
+      mock.fplPlayer.findMany.mockResolvedValue([
+        drifted[11].player,
+        makePlayer(20, 3, 17, 80),
+      ]);
+
+      const result = await previewTransfers('user-1', [
+        { outPlayerId: 12, inPlayerId: 20 },
+      ]);
+
+      expect(result.ok).toBe(false);
+      expect((result as any).errors).toContain('MAX_3_PER_CLUB:17');
+    });
+  });
+
   it('returns successful preview with correct budget calculation', async () => {
     mock.fplPlayer.findMany.mockResolvedValue([
       BASE_SQUAD[7].player,

@@ -105,8 +105,58 @@ export async function getEditableGameweekId(): Promise<number> {
 }
 
 /**
+ * Which gameweek's squad should carry forward.
+ *
+ * Normally the one just gone. The exception is Free Hit: it buys a squad for a
+ * single gameweek only, so the next gameweek must inherit from the gameweek
+ * BEFORE it — that reversion is the whole point of the chip. Doing it here
+ * means the revert happens exactly when the next squad is first materialised
+ * (at the deadline, or the first time the team is opened afterwards) without a
+ * separate snapshot table or scheduled job.
+ *
+ * If the Free Hit was played in the very first gameweek there is nothing to
+ * revert to, and the free-hit squad simply stands.
+ */
+async function resolveSquadSourceGameweek(
+  userTeamId: string,
+  candidateGameweek: number,
+): Promise<number> {
+  const state = await prisma.userGameweekState.findUnique({
+    where: {
+      userTeamId_gameweek: { userTeamId, gameweek: candidateGameweek },
+    },
+    select: { activeChip: true, budgetBeforeChip: true },
+  });
+
+  if (state?.activeChip !== 'FREE_HIT') return candidateGameweek;
+
+  const beforeFreeHit = await prisma.userPick.findFirst({
+    where: {
+      userTeamId,
+      gameweek: { lt: candidateGameweek },
+    },
+    orderBy: { gameweek: 'desc' },
+    select: { gameweek: true },
+  });
+
+  if (!beforeFreeHit) return candidateGameweek;
+
+  // The squad going back without the money going back would leave the team with
+  // whatever bank the one-week squad happened to leave behind.
+  if (state.budgetBeforeChip !== null && state.budgetBeforeChip !== undefined) {
+    await prisma.userTeam.update({
+      where: { id: userTeamId },
+      data: { budget: state.budgetBeforeChip },
+    });
+  }
+
+  return beforeFreeHit.gameweek;
+}
+
+/**
  * Ensures a team has 15 picks for the target gameweek.
  * If not, copies the latest previous gameweek picks into the target GW.
+ * A Free Hit gameweek is skipped over — see resolveSquadSourceGameweek.
  */
 export async function ensureSquadExistsForGameweek(
   userTeamId: string,
@@ -129,10 +179,15 @@ export async function ensureSquadExistsForGameweek(
 
   if (!latestPreviousGw) return;
 
+  const sourceGameweek = await resolveSquadSourceGameweek(
+    userTeamId,
+    latestPreviousGw.gameweek,
+  );
+
   const previousPicks = await prisma.userPick.findMany({
     where: {
       userTeamId,
-      gameweek: latestPreviousGw.gameweek,
+      gameweek: sourceGameweek,
     },
     orderBy: { position: 'asc' },
   });

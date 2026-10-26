@@ -96,7 +96,19 @@ const ML_UNAVAILABLE = {
 };
 
 const CAPTAIN_CANDIDATES = [
-  { playerId: 1, webName: 'Salah', club: 'LIV', position: 'MID', score: 42, reasons: ['strong form'], risk: [] },
+  {
+    playerId: 1, webName: 'Salah', club: 'LIV', position: 'MID', score: 42,
+    reasons: ['strong form'], risk: [],
+    // IMPROVEMENT #2: explanation is guaranteed on every candidate now — see
+    // recommendation.types.ts RecommendationExplanation.
+    explanation: {
+      upside: '+3.2 expected points vs. current captain',
+      risk: 'none identified',
+      horizon: 'GW1' as const,
+      alternative: 'None — clear top pick.',
+      confidence: 'HIGH' as const,
+    },
+  },
 ];
 
 const COMPARISON_RESULT = {

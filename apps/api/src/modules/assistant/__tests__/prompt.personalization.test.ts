@@ -116,7 +116,7 @@ describe('captaincy intent prompt quality', () => {
   it('captaincy prompt tells LLM not to invent captain options', () => {
     const prompt = buildSystemPrompt(makeCtx(), null, 'CAPTAINCY');
     expect(prompt.toLowerCase()).toContain('do not');
-    expect(prompt).toContain('not listed');
+    expect(prompt.toLowerCase()).toContain('not in the computed data');
   });
 
   it('captaincy prompt includes ML vs heuristic conflict resolution guidance', () => {
@@ -269,9 +269,13 @@ describe('user context injection', () => {
     const recBlock = '=== CAPTAINCY ===\nSalah top pick';
     const prompt   = buildSystemPrompt(makeCtx(), recBlock, 'CAPTAINCY');
     const recIdx   = prompt.indexOf('Salah top pick');
-    const critIdx  = prompt.indexOf('CRITICAL');
+    // Search for the specific "CRITICAL INSTRUCTION" marker, not just
+    // "CRITICAL" — the CAPTAINCY intent guidance earlier in the prompt also
+    // contains the substring "CRITICAL for captaincy:", which indexOf('CRITICAL')
+    // would match first regardless of intent.
+    const critIdx  = prompt.indexOf('CRITICAL INSTRUCTION');
     expect(recIdx).toBeGreaterThan(0);
-    expect(critIdx).toBeGreaterThan(recIdx); // CRITICAL comes after recommendation data
+    expect(critIdx).toBeGreaterThan(recIdx); // CRITICAL INSTRUCTION comes after recommendation data
   });
 });
 

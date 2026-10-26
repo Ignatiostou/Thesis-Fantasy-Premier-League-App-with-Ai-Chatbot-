@@ -5,15 +5,28 @@
 import { useState, useCallback, useRef } from 'react';
 import type { AssistantMessageDto, AssistantChatResponse } from '@fpl/types';
 
+export type PrimarySource = 'ML' | 'HEURISTIC' | 'ML_ONLY' | 'HEURISTIC_ONLY';
+
 export interface ChatMessage {
-  id:        string;
-  role:      'user' | 'assistant';
-  content:   string;
-  createdAt: string;
+  id:         string;
+  role:       'user' | 'assistant';
+  content:    string;
+  createdAt:  string;
+  /** Transient "what's happening right now" text for a long-running step
+   *  (e.g. the initial-squad ML optimizer) before any real content has
+   *  streamed in yet. Cleared as soon as the first delta arrives. */
+  statusText?: string;
+  /** Which engine drove this answer — the ML models or the rule-based
+   *  heuristics — and why. Sent by the API as a `meta` event before the text
+   *  starts streaming, and shown as a provenance badge on the reply. */
+  primarySource?: PrimarySource;
+  sourceReason?:  string;
 }
 
 type StreamEvent =
   | { type: 'session'; sessionId: string }
+  | { type: 'status';  message:   string }
+  | { type: 'meta';    primarySource: PrimarySource; reason: string }
   | { type: 'delta';   content:   string }
   | { type: 'done' }
   | { type: 'error';   message:   string };
@@ -95,10 +108,30 @@ export function useChat() {
 
           if (evt.type === 'session' && !sessionId) setSessionId(evt.sessionId);
 
+          if (evt.type === 'meta') {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === tempAssistantId
+                  ? { ...m, primarySource: evt.primarySource, sourceReason: evt.reason }
+                  : m,
+              ),
+            );
+          }
+
+          if (evt.type === 'status') {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === tempAssistantId ? { ...m, statusText: evt.message } : m,
+              ),
+            );
+          }
+
           if (evt.type === 'delta') {
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === tempAssistantId ? { ...m, content: m.content + evt.content } : m,
+                m.id === tempAssistantId
+                  ? { ...m, content: m.content + evt.content, statusText: undefined }
+                  : m,
               ),
             );
           }

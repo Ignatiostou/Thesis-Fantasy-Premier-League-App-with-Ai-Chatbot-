@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from constants import FEATURE_COLS, FDR_NEUTRAL
+from constants import FEATURE_COLS, FDR_NEUTRAL, season_round_key
 from logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -44,6 +44,14 @@ def _preserve_raw_gw_points(df: pd.DataFrame) -> pd.DataFrame:
       - build_training_dataset.attach_targets (source for TARGET_POINTS)
     """
     df["gw_points"] = df["total_points"].astype(float)
+    # Same trap for the team-form inputs: _add_cumulative_season_features
+    # replaces goals_scored and clean_sheets with cumulative season totals, so
+    # anything reading them later gets a running count instead of that GW's
+    # result. goals_conceded is not on that list, but is copied here too so all
+    # three team inputs are read from one consistent, clearly-named place.
+    df["gw_goals_scored"]  = df["goals_scored"].astype(float)
+    df["gw_clean_sheets"]  = df["clean_sheets"].astype(float)
+    df["gw_goals_conceded"] = df["goals_conceded"].astype(float)
     return df
 
 
@@ -136,6 +144,211 @@ def _add_fixture_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def build_team_round_table(df: pd.DataFrame, key: list[str]) -> pd.DataFrame:
+    """One row per team per round: goals for/against, clean sheet, venue.
+
+    goals_for is the sum of the squad's goals that round. goals_against and the
+    clean-sheet flag are taken as the median/majority across players who lasted
+    60+ minutes — they all played the same match, so the consensus is robust to
+    a substitute who came on after a goal.
+    """
+    anchored = df[df["minutes"] >= 60]
+
+    # gw_* copies, not the raw column names — by this point in the pipeline
+    # goals_scored and clean_sheets hold cumulative season totals.
+    gf = df.groupby(key + ["_round_key"])["gw_goals_scored"].sum().rename("team_gf")
+    ga = anchored.groupby(key + ["_round_key"])["gw_goals_conceded"].median().rename("team_ga")
+    cs = (anchored.groupby(key + ["_round_key"])["gw_clean_sheets"]
+          .mean().gt(0.5).astype(float).rename("team_cs"))
+    home = df.groupby(key + ["_round_key"])["was_home"].first().rename("was_home")
+    # Blank gameweeks: the squad still has rows for the round, all with zero
+    # minutes. Left in, they read as a 0-0 draw — dragging attacking form down
+    # and consuming a slot in the 5-match window with a match that never
+    # happened. A round only counts if somebody actually played in it.
+    played = df.groupby(key + ["_round_key"])["minutes"].max().rename("_max_minutes")
+
+    t = pd.concat([gf, ga, cs, home, played], axis=1).reset_index()
+    t = t[t["_max_minutes"] > 0].drop(columns=["_max_minutes"])
+    return t.sort_values(key + ["_round_key"])
+
+
+def season_scope(df: pd.DataFrame) -> list[str]:
+    """Grouping keys for anything that must restart each season.
+
+    Rolling form deliberately spans the season boundary — a player's opening
+    fixture is best predicted from how he finished the last one. Cumulative
+    season totals must NOT: they describe one season by definition, and that is
+    what inference reads back out of player_gameweek_stats.
+    """
+    return ["player_id", "season"] if "season" in df.columns else ["player_id"]
+
+
+def team_key(df: pd.DataFrame) -> list[str]:
+    """Columns that identify a club. Team ids are renumbered between seasons, so
+    a club is only pinned down by (season, team_id) once more than one season is
+    in play."""
+    return ["season", "team_id"] if "season" in df.columns else ["team_id"]
+
+
+def build_team_form_table(df: pd.DataFrame, key: list[str]) -> pd.DataFrame:
+    """Team-round table with rolling form columns attached.
+
+    Shared by the own-team and opponent features so a club's "form" has exactly
+    one definition regardless of which side of the fixture is being described.
+    Columns are named neutrally (gf_l5, ga_l5, ...) and renamed by the caller.
+    """
+    t = build_team_round_table(df, key)
+    g = t.groupby(key, sort=False)
+    t["gf_l5"] = g["team_gf"].transform(lambda s: _rolling(s, 5))
+    t["ga_l5"] = g["team_ga"].transform(lambda s: _rolling(s, 5))
+    t["cs_l5"] = g["team_cs"].transform(lambda s: _rolling(s, 5))
+    t["gd_l5"] = t["gf_l5"] - t["ga_l5"]
+
+    # Venue splits: roll home matches and away matches as separate series, then
+    # carry each forward so any round can read "as of the last home/away match
+    # before now". Forward-fill happens within the team, after the shift, so no
+    # future result can leak backwards.
+    for venue, label in ((True, "home"), (False, "away")):
+        sub = t[t["was_home"] == venue]
+        if sub.empty:
+            t[f"{label}_gf"] = np.nan
+            t[f"{label}_ga"] = np.nan
+            continue
+        sg = sub.groupby(key, sort=False)
+        vals = pd.DataFrame({
+            f"{label}_gf": sg["team_gf"].transform(lambda s: _rolling(s, 5)),
+            f"{label}_ga": sg["team_ga"].transform(lambda s: _rolling(s, 5)),
+        }, index=sub.index)
+        t = t.join(vals)
+        t[f"{label}_gf"] = t.groupby(key, sort=False)[f"{label}_gf"].ffill()
+        t[f"{label}_ga"] = t.groupby(key, sort=False)[f"{label}_ga"].ffill()
+
+    return t
+
+
+def _add_team_form_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    team_gf_l5, team_ga_l5, team_cs_rate_l5, team_gd_l5,
+    team_venue_gf_l5, team_venue_ga_l5
+
+    The player's OWN club's attacking and defensive form. Player-level features
+    describe the individual; these describe the side he plays for, which is what
+    actually drives clean-sheet points for defenders and keepers.
+
+    Rolls team results with the same shift(1) convention as the player features,
+    so a row never sees its own gameweek. Must run AFTER _add_fixture_features —
+    the venue-split columns are selected using is_home_next_gw.
+
+    Depends on team_id being the club for THAT gameweek. That holds for rows
+    written with player_gameweek_stats.teamId, and for extracts taken before the
+    season rolled over. Where it is missing the features fall back to zeros.
+    """
+    out_cols = ["team_gf_l5", "team_ga_l5", "team_cs_rate_l5", "team_gd_l5",
+                "team_venue_gf_l5", "team_venue_ga_l5"]
+
+    if "team_id" not in df.columns or df["team_id"].isna().all():
+        logger.warning("team_id unavailable — team form features filled with 0")
+        for c in out_cols:
+            df[c] = 0.0
+        return df
+
+    df["_round_key"] = season_round_key(df)
+    key = team_key(df)
+
+    t = build_team_form_table(df, key)
+
+    merge_cols = key + ["_round_key"] + ["gf_l5", "ga_l5", "cs_l5", "gd_l5",
+                                         "home_gf", "home_ga", "away_gf", "away_ga"]
+    df = df.merge(t[merge_cols], on=key + ["_round_key"], how="left")
+    df = df.rename(columns={"gf_l5": "team_gf_l5", "ga_l5": "team_ga_l5",
+                            "cs_l5": "team_cs_rate_l5", "gd_l5": "team_gd_l5",
+                            "home_gf": "_home_gf", "home_ga": "_home_ga",
+                            "away_gf": "_away_gf", "away_ga": "_away_ga"})
+
+    at_home = df["is_home_next_gw"].astype(float) == 1.0
+    df["team_venue_gf_l5"] = np.where(at_home, df["_home_gf"], df["_away_gf"])
+    df["team_venue_ga_l5"] = np.where(at_home, df["_home_ga"], df["_away_ga"])
+
+    df = df.drop(columns=["_home_gf", "_home_ga", "_away_gf", "_away_ga", "_round_key"])
+    for c in out_cols:
+        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
+
+    logger.info("Team form features built for %d teams",
+                df.groupby(key, sort=False).ngroups)
+    return df
+
+
+def opponent_data_coverage(df: pd.DataFrame) -> float:
+    """Share of rows that know who the NEXT opponent is."""
+    if "opponent_team_id" not in df.columns:
+        return 0.0
+    nxt = df.groupby("player_id")["opponent_team_id"].shift(-1)
+    return float(nxt.notna().mean())
+
+
+def _add_opponent_strength_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    opp_gf_l5, opp_ga_l5, opp_cs_rate_l5, opp_gd_l5, opp_venue_ga_l5
+
+    How good the side he is about to face has been. A striker facing a leaky
+    defence and a striker facing a miserly one look identical to the model
+    otherwise — fdr compresses the whole opponent into one 1-5 integer shared by
+    every player in the squad.
+
+    Requires opponent_team_id, recorded on the stat row from GW1 2026-27 onward.
+    It CANNOT be reconstructed for earlier seasons: opponent identity was never
+    stored, and recovering it from scorelines produced a fixture list that
+    violated the round-robin structure (47 duplicated pairings, teams with 22-35
+    matches instead of 38), so those rows are left at zero rather than guessed.
+
+    The opponent's form is read as of the same round as the player's row, using
+    the same rolling definition as the own-team features, and the venue split is
+    inverted — the player at home means the opponent is away.
+    """
+    out_cols = ["opp_gf_l5", "opp_ga_l5", "opp_cs_rate_l5", "opp_gd_l5", "opp_venue_ga_l5"]
+
+    coverage = opponent_data_coverage(df)
+    if coverage == 0.0:
+        logger.info("No opponent_team_id available — opponent features are 0 "
+                    "(expected until 2026-27 data accumulates)")
+        for c in out_cols:
+            df[c] = 0.0
+        return df
+    if coverage < 0.5:
+        logger.warning("Only %.1f%% of rows know their next opponent — opponent "
+                       "features will be mostly zero", coverage * 100)
+
+    df["_round_key"] = season_round_key(df)
+    key = team_key(df)
+    t = build_team_form_table(df, key)
+
+    # Who they face NEXT — the fixture being predicted, known in advance.
+    df["_next_opp"] = df.groupby("player_id")["opponent_team_id"].shift(-1)
+
+    right = t[key + ["_round_key", "gf_l5", "ga_l5", "cs_l5", "gd_l5", "home_ga", "away_ga"]]
+    left_on = (["season", "_next_opp", "_round_key"] if "season" in key
+               else ["_next_opp", "_round_key"])
+    df = df.merge(right, left_on=left_on, right_on=key + ["_round_key"],
+                  how="left", suffixes=("", "_opp"))
+
+    df = df.rename(columns={"gf_l5": "opp_gf_l5", "ga_l5": "opp_ga_l5",
+                            "cs_l5": "opp_cs_rate_l5", "gd_l5": "opp_gd_l5"})
+
+    # Venue is inverted relative to the player: he is home, they are away.
+    at_home = df["is_home_next_gw"].astype(float) == 1.0
+    df["opp_venue_ga_l5"] = np.where(at_home, df["away_ga"], df["home_ga"])
+
+    drop = [c for c in ["home_ga", "away_ga", "_next_opp", "_round_key",
+                        "team_id_opp", "season_opp"] if c in df.columns]
+    df = df.drop(columns=drop)
+    for c in out_cols:
+        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
+
+    logger.info("Opponent strength features built (next-opponent known for %.1f%% of rows)",
+                coverage * 100)
+    return df
+
+
 def _add_cumulative_season_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Cumulative season totals up to (but NOT including) the current GW.
@@ -145,11 +358,20 @@ def _add_cumulative_season_features(df: pd.DataFrame) -> pd.DataFrame:
     Overwriting "total_points" here was the root cause of the leakage bug —
     attach_targets would then shift the cumulative total as the points target
     instead of the raw per-GW score.
+
+    The cumsum resets at each season. Grouping by player alone turns these into
+    career totals the moment a second season is merged in: a 2026-27 GW2 row
+    would inherit the whole of 2025-26 (measured: season_total_pts 194 instead
+    of 4). Inference reads them from player_gameweek_stats, which the rollover
+    clears, so it always reports the current season — without the reset the two
+    sides disagree on the 3rd most important feature.
     """
+    keys = season_scope(df)
+
     for col in ["goals_scored", "assists", "clean_sheets", "bonus"]:
         if col in df.columns:
             df[col] = (
-                df.groupby("player_id")[col]
+                df.groupby(keys)[col]
                 .transform(lambda s: s.shift(1).cumsum())
                 .fillna(0)
                 .astype(float)
@@ -160,7 +382,7 @@ def _add_cumulative_season_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Use "gw_points" (raw) as source — writes to new column "season_total_pts"
     df["season_total_pts"] = (
-        df.groupby("player_id")["gw_points"]
+        df.groupby(keys)["gw_points"]
         .transform(lambda s: s.shift(1).cumsum())
         .fillna(0)
         .astype(float)
@@ -177,9 +399,10 @@ def _add_pts_per_game(df: pd.DataFrame) -> pd.DataFrame:
     so a player who has played fewer games is not unfairly penalised.
     Must run after _add_cumulative_season_features.
     """
-    # games_played = GWs where the player had > 0 minutes, cumulative, shifted
+    # games_played = GWs where the player had > 0 minutes, cumulative, shifted.
+    # Season-scoped for the same reason as the totals it divides.
     df["_games_played"] = (
-        df.groupby("player_id")["minutes"]
+        df.groupby(season_scope(df))["minutes"]
         .transform(lambda s: (s.shift(1) > 0).cumsum())
         .fillna(0)
     )
@@ -252,8 +475,14 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     logger.info(f"Building features for {len(df):,} rows, {df['player_id'].nunique()} players...")
 
-    # Ensure sorted — rolling computations require chronological order per player
-    df = df.sort_values(["player_id", "gameweek"]).copy()
+    # Ensure sorted — rolling computations require chronological order per player.
+    # season_round_key orders correctly across a season boundary (where 'gameweek'
+    # alone resets to 1 each season); every groupby("player_id") below relies on
+    # row ORDER within the group, not on the raw gameweek value, so this single
+    # sort is enough to make shift()/rolling()/cumsum() correct across seasons.
+    df = df.copy()
+    df["_round_key"] = season_round_key(df)
+    df = df.sort_values(["player_id", "_round_key"]).drop(columns=["_round_key"])
 
     # 0. Preserve raw per-GW points FIRST — before anything overwrites total_points
     df = _preserve_raw_gw_points(df)
@@ -284,6 +513,14 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # 9. Metadata pass-through
     df = _add_metadata_features(df)
+
+    # 10. Own-team form — after step 7, which supplies is_home_next_gw for the
+    #     venue split. Re-sorts internally via the merge, so it runs last.
+    df = _add_team_form_features(df)
+
+    # 11. Opponent strength — zeros until opponent_team_id has been captured
+    #     (from GW1 2026-27). Same venue dependency as step 10.
+    df = _add_opponent_strength_features(df)
 
     # ── Final validation ──────────────────────────────────────────────────────
     missing = [c for c in FEATURE_COLS if c not in df.columns]

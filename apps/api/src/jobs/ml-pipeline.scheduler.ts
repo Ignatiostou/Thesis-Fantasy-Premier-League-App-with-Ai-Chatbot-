@@ -1,23 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// ML pipeline scheduler.
-//
-// Every 15 minutes it checks whether a gameweek has newly completed:
-//   - the FPL event must be finished AND data_checked (bonus points, stats
-//     and totals finalized by FPL — not just the last match ended)
-//   - player_gameweek_stats must contain the completed GW's rows
-//     (imported by the scoring scheduler; synced here as a fallback)
-//   - predictions for the NEXT gameweek must not exist yet
-//
-// When all conditions hold it runs the Python pipeline once:
-//   import results → feature engineering → retrain → validate → predict
-//   next GW → store predictions → chatbot picks them up.
-//
-// On startup, if no trained model exists at all, it triggers the one-time
-// historical backfill automatically (disable with ML_AUTO_BACKFILL=false).
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { prisma } from '../db/prisma.js';
-import { mlModelExists, runMlBackfill, runMlPipeline } from './ml-pipeline.service.js';
+import { mlModelExists, runMlBackfill, runMlPipeline, runMlPredictOnly } from './ml-pipeline.service.js';
 
 const POLL_INTERVAL_MS = Number(process.env.ML_POLL_MINUTES ?? 15) * 60 * 1000;
 
@@ -37,14 +19,73 @@ async function latestFinalizedGameweek(): Promise<number | null> {
   return rows.length ? Number(rows[0].id) : null;
 }
 
-async function tick(): Promise<void> {
+/**
+ * The gameweek FPL currently considers current/next.
+ * Mirrors predict_next_gw.py's own CURRENT_GAMEWEEK_QUERY so the Node trigger
+ * and the Python resolution agree on which GW is "up next".
+ */
+async function currentUpcomingGameweek(): Promise<number | null> {
+  const rows = await prisma.$queryRaw<{ id: number }[]>`
+    SELECT id FROM fpl_events
+    WHERE
+        "isCurrent" = TRUE
+        OR (raw->>'is_next')::boolean = TRUE
+    ORDER BY
+        CASE WHEN (raw->>'is_next')::boolean = TRUE THEN 0 ELSE 1 END,
+        id ASC
+    LIMIT 1
+  `;
+  return rows.length ? Number(rows[0].id) : null;
+}
+
+/**
+ * Season-boundary fallback: no gameweek has ever finished (yet), so the
+ * normal completed-GW flow has nothing to hang off. If there's a trained
+ * model and the upcoming GW has no predictions yet, generate them once with
+ * the carried-over model — no retrain, there's no same-season data for that.
+ */
+async function predictUpcomingGameweekIfMissing(): Promise<void> {
+  if (!mlModelExists()) return; // no model yet — the startup backfill owns this case
+
+  const upcomingGw = await currentUpcomingGameweek();
+  if (upcomingGw === null) return; // fixtures not synced yet
+
+  const existingPredictions = await prisma.playerPrediction.count({
+    where: {
+      gameweek: upcomingGw,
+      NOT: { modelVersion: { startsWith: 'backtest' } },
+    },
+  });
+  if (existingPredictions > 0) return;
+
+  console.log(
+    `[ML Scheduler] No finalized gameweek yet (season boundary) — ` +
+    `generating predictions for GW${upcomingGw} with the existing model`,
+  );
+  _running = true;
+  try {
+    await runMlPredictOnly(upcomingGw);
+    console.log(`[ML Scheduler] Predictions for GW${upcomingGw} are now available`);
+  } catch (err) {
+    console.error(`[ML Scheduler] Predict-only run for GW${upcomingGw} failed (will retry next tick):`, err);
+  } finally {
+    _running = false;
+  }
+}
+
+export async function tick(): Promise<void> {
   if (_running) {
     console.log('[ML Scheduler] Previous run still in progress — skipping tick');
     return;
   }
 
   const completedGw = await latestFinalizedGameweek();
-  if (completedGw === null) return; // season not started / no finalized data yet
+  if (completedGw === null) {
+    // Nothing has ever finished (season boundary, or brand-new deployment
+    // mid-season). Fall back to predicting the upcoming GW directly.
+    await predictUpcomingGameweekIfMissing();
+    return;
+  }
 
   // Season over? (no next event to predict)
   const nextEvent = await prisma.fplEvent.findUnique({ where: { id: completedGw + 1 } });
@@ -60,10 +101,22 @@ async function tick(): Promise<void> {
   // Already processed? LIVE predictions for the next GW mean the pipeline ran.
   // Backtest rows (model_version backtest_*) must not count — they are
   // historical research data, not the live prediction for the upcoming GW.
+  // Provisional rows (model_version provisional_*) must not count either —
+  // they're the season-boundary carried-over-model stopgap
+  // (predictUpcomingGameweekIfMissing, below), generated with no retrain
+  // because nothing had finalized yet. Now that completedGw HAS finalized,
+  // this is exactly the case that needs a real retrain to replace them —
+  // counting them as "already processed" would leave the stopgap numbers in
+  // place for the rest of the season.
   const existingPredictions = await prisma.playerPrediction.count({
     where: {
       gameweek: completedGw + 1,
-      NOT: { modelVersion: { startsWith: 'backtest' } },
+      NOT: {
+        OR: [
+          { modelVersion: { startsWith: 'backtest' } },
+          { modelVersion: { startsWith: 'provisional_' } },
+        ],
+      },
     },
   });
   if (existingPredictions > 0) return;

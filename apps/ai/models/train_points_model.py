@@ -15,7 +15,20 @@ from sklearn.pipeline import Pipeline
 from xgboost import XGBRegressor
 
 from config import settings
-from constants import TARGET_POINTS, FEATURE_COLS
+from constants import TARGET_POINTS, TARGET_PLAYED, FEATURE_COLS
+
+# The points model answers "how many points if he appears", not "how many points
+# in expectation". Roughly 70% of player-gameweeks are non-appearances scoring
+# ~0.15, so training across all rows dragged every prediction toward that mass:
+# real starters were predicted 2.47 against an actual 3.48, and the model never
+# output above 7.0 when reality reaches 18.
+#
+# The unconditional value is reassembled at inference as
+#     E[points] = P(appears) x E[points | appears]
+# using the played classifier for the first term. Both terms condition on the
+# same event — appearing for at least MIN_MINUTES_PLAYED — so the product is
+# coherent.
+TARGET_SCOPE = "played_only"
 from logging_utils import get_logger
 from models.model_utils import (
     ensure_model_dirs,
@@ -123,13 +136,24 @@ def main() -> None:
     ensure_model_dirs()
 
     train_df, val_df = load_train_validation()
+
+    # Restrict to appearances — see TARGET_SCOPE above.
+    n_before = (len(train_df), len(val_df))
+    train_df = train_df[train_df[TARGET_PLAYED] == 1]
+    val_df = val_df[val_df[TARGET_PLAYED] == 1]
+    logger.info(
+        "Conditional target: kept appearances only — train %d/%d, val %d/%d rows",
+        len(train_df), n_before[0], len(val_df), n_before[1],
+    )
+
     x_train, y_train, x_val, y_val = get_xy(train_df, val_df, TARGET_POINTS)
 
     logger.info(
-        "Training points models | train=%s | val=%s | features=%s",
+        "Training points models | train=%s | val=%s | features=%s | target mean=%.2f",
         len(x_train),
         len(x_val),
         len(FEATURE_COLS),
+        float(y_train.mean()),
     )
 
     candidates = build_candidates()
@@ -186,6 +210,10 @@ def main() -> None:
             "model_version": MODEL_VERSION,
             "best_model": best_name,
             "target": TARGET_POINTS,
+            # Marks the prediction as conditional on appearing. The pipeline's
+            # safety gate keys off this: MAE from a played-only model is not
+            # comparable with one trained across all rows.
+            "target_scope": TARGET_SCOPE,
             "feature_cols": FEATURE_COLS,
             "trained_rows": len(x_train),
             "validation_rows": len(x_val),

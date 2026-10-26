@@ -73,6 +73,13 @@ model FplPlayer {
   nowCost  Int    // e.g. 75 => £7.5m
   status   String // a/d/i/s/u etc
 
+  // False when this id was absent from the FPL API's most recent sync —
+  // e.g. a player who transferred clubs and got reissued a new element id;
+  // the old id's row is never deleted (FK history: picks, transfers, stats
+  // reference it), but it must stop appearing in browse/search results.
+  // See Fpl-sync.service.ts's syncPlayers().
+  isActiveInFpl Boolean @default(true)
+
   chanceOfPlayingNextRound Int?
   totalPoints              Int?
   eventPoints              Int?
@@ -96,6 +103,7 @@ model FplPlayer {
   predictions PlayerPrediction[]
 
   @@index([teamId])
+  @@index([isActiveInFpl])
   @@map("fpl_players")
 }
 
@@ -230,6 +238,11 @@ model UserGameweekState {
   transfersMade Int     @default(0)
   pointsHit     Int     @default(0)
   activeChip    String?
+  // Bank balance captured when a Free Hit is played. That chip buys a squad for
+  // one gameweek only, and its transfers move the bank like any other — so the
+  // revert has to restore the money as well as the players, or the team keeps
+  // whatever the temporary squad happened to cost.
+  budgetBeforeChip Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -302,6 +315,15 @@ model UserGameweekScore {
   @@map("user_gameweek_scores")
 }
 
+model GameweekScoringStatus {
+  gameweek  Int      @id // FplEvent id
+  isFinal   Boolean  @default(false) // true once scored after FPL's data_checked
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("gameweek_scoring_status")
+}
+
 model PlayerGameweekStat {
   id       String @id @default(cuid())
   playerId Int
@@ -325,6 +347,17 @@ model PlayerGameweekStat {
   creativity      String?
   threat          String?
   ictIndex        String?
+
+  // Fixture context, captured at ingest time. These CANNOT be reconstructed
+  // later: fpl_fixtures/fpl_teams are current-season-only reference data that
+  // get overwritten, and FPL renumbers team IDs whenever the league
+  // composition changes. Without them, team and opponent features are
+  // impossible for past seasons (this is how 2025-26 was lost).
+  teamId         Int?     // player's club for THIS gameweek, not "now"
+  opponentTeamId Int?
+  wasHome        Boolean?
+  fixtureCount   Int?     // >1 marks a double gameweek: stats are summed across
+                          // fixtures, so opponent/venue describe only the first
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -516,7 +549,13 @@ model PlayerPrediction {
 
   playerId            Int      @map("player_id")
   gameweek            Int
+  // Expected points for the gameweek — appearance risk already priced in.
   predictedPtsGw1     Float    @map("predicted_pts_gw1")
+  // Points if he actually appears. predictedPtsGw1 = probPlaying * this.
+  // Shown to users as "if he starts"; the two differ sharply for rotation
+  // risks, and reading the expected value as a starting projection is what
+  // made healthy starters look like sub-2-point players.
+  predictedPtsIfStarts Float?  @map("predicted_pts_if_starts")
   predictedPtsGw3     Float    @map("predicted_pts_gw3")
   predictedPtsGw5     Float    @map("predicted_pts_gw5")
   predictedMinutes    Float    @map("predicted_minutes")

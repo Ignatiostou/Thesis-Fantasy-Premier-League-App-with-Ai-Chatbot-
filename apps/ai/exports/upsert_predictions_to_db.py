@@ -22,6 +22,7 @@ REQUIRED_COLS = [
     "player_id",
     "gameweek",
     "predicted_pts_gw1",
+    "predicted_pts_if_starts",
     "predicted_pts_gw3",
     "predicted_pts_gw5",
     "prob_playing",
@@ -102,6 +103,7 @@ def prepare_for_db(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in [
         "predicted_pts_gw1",
+        "predicted_pts_if_starts",
         "predicted_pts_gw3",
         "predicted_pts_gw5",
         "prob_playing",

@@ -42,6 +42,10 @@ vi.mock('../assistant.llm.service.js', () => ({
 
 vi.mock('../assistant.intent.service.js', () => ({
   detectAssistantIntent: vi.fn().mockReturnValue('CAPTAINCY'),
+  // In scope by default — every message in this file is a real FPL question.
+  // The scope gate itself is covered in assistant.intent.service.test.ts.
+  isFplRelated: vi.fn().mockReturnValue(true),
+  OUT_OF_SCOPE_REPLY: 'out of scope',
 }));
 
 vi.mock('../recommendation.service.js', () => ({

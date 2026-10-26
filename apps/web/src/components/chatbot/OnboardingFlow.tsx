@@ -56,7 +56,7 @@ export function OnboardingFlow({ onComplete }: Props) {
             animation: 'spin 0.7s linear infinite',
           }}
         />
-        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, letterSpacing: '0.1em', margin: 0 }}>
+        <p style={{ color: 'rgba(255,255,255,0.68)', fontSize: 12, letterSpacing: '0.1em', margin: 0 }}>
           Loading profile setup…
         </p>
       </div>
@@ -164,7 +164,7 @@ export function OnboardingFlow({ onComplete }: Props) {
 
           <span
             style={{
-              color: 'rgba(255,255,255,0.25)',
+              color: 'rgba(255,255,255,0.6)',
               fontSize: 10,
               fontFamily: "'Barlow', sans-serif",
               letterSpacing: '0.1em',
@@ -229,7 +229,7 @@ export function OnboardingFlow({ onComplete }: Props) {
             {q.subtext && (
               <p
                 style={{
-                  color: 'rgba(255,255,255,0.38)',
+                  color: 'rgba(255,255,255,0.7)',
                   fontSize: 11,
                   fontFamily: "'Barlow', sans-serif",
                   fontWeight: 400,
@@ -279,7 +279,7 @@ export function OnboardingFlow({ onComplete }: Props) {
               >
                 <span
                   style={{
-                    color: isChosen ? '#00FF87' : dimmed ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)',
+                    color: isChosen ? '#00FF87' : dimmed ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.88)',
                     fontSize: 12,
                     fontWeight: 600,
                     letterSpacing: '0.02em',
@@ -294,7 +294,7 @@ export function OnboardingFlow({ onComplete }: Props) {
                 {/* Visual intensity indicator */}
                 <span
                   style={{
-                    color: isChosen ? '#00FF87' : 'rgba(255,255,255,0.15)',
+                    color: isChosen ? '#00FF87' : 'rgba(255,255,255,0.45)',
                     fontSize: 9,
                     letterSpacing: 2,
                     flexShrink: 0,
@@ -346,7 +346,7 @@ export function OnboardingFlow({ onComplete }: Props) {
               animation: 'spin 0.7s linear infinite',
             }}
           />
-          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontFamily: "'Barlow', sans-serif", letterSpacing: '0.1em' }}>
+          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontFamily: "'Barlow', sans-serif", letterSpacing: '0.1em' }}>
             Saving your profile…
           </span>
         </div>

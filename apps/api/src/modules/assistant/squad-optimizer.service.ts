@@ -1,12 +1,21 @@
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { resolvePython } from '../../jobs/ml-pipeline.service.js';
 
-const PYTHON_BIN = process.env.PYTHON_BIN ?? 'python3';
+// Was process.cwd()-relative + hardcoded 'python3' — fragile (breaks depending
+// on where the Node process happens to be started from) and wrong on Windows
+// dev setups (no 'python3' on PATH, and it wouldn't pick up apps/ai/.venv
+// where pulp/pandas/etc. are actually installed). Anchored to this file's own
+// location instead, same pattern as ml-pipeline.service.ts. (fileURLToPath,
+// not new URL().pathname — the latter yields "/C:/..." on Windows, which
+// path.resolve does NOT treat as the same thing as "C:\...".)
+const AI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../ai');
 const SCRIPT_PATH =
   process.env.SQUAD_OPTIMIZER_SCRIPT ??
-  resolve(process.cwd(), '../../ai/inference/optimize_initial_squad.py');
+  resolve(AI_DIR, 'inference/optimize_initial_squad.py');
 
-const TIMEOUT_MS = 60_000;   
+const TIMEOUT_MS = 60_000;
 
 
 
@@ -33,6 +42,11 @@ export interface OptimizedSquadResult {
   budget_left?:     number;
   weights?:         Record<string, number>;
   candidate_count?: number;
+  /** Ranked shortlist beyond the 15-man squad — position-balanced, not
+   *  budget/club constrained. Lets the user ask to see more or fewer
+   *  candidates than the one ILP-optimal squad. */
+  pool?:            OptimizedSquadPlayer[];
+  pool_size?:       number;
   reason?:          string;
 }
 
@@ -41,6 +55,8 @@ export interface OptimizeOptions {
   budget?:     number;          // in tenths; default 1000 (= £100.0m)
   forceIn?:    number[];
   forceOut?:   number[];
+  /** Size of the ranked candidate shortlist to return. Default 30. */
+  poolSize?:   number;
 }
 
 // ── Spawn wrapper ────────────────────────────────────────────────────────────
@@ -51,13 +67,18 @@ export async function optimizeInitialSquad(
   const args: string[] = [SCRIPT_PATH, '--json-out'];
   if (opts.userId)   args.push('--user-id', opts.userId);
   if (opts.budget)   args.push('--budget', String(opts.budget));
+  if (opts.poolSize) args.push('--pool-size', String(opts.poolSize));
   if (opts.forceIn?.length)
     args.push('--force-in',  ...opts.forceIn.map(String));
   if (opts.forceOut?.length)
     args.push('--force-out', ...opts.forceOut.map(String));
 
   return new Promise((resolveP) => {
-    const proc = spawn(PYTHON_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const proc = spawn(resolvePython(), args, {
+      cwd:   AI_DIR,
+      env:   { ...process.env, PYTHONIOENCODING: 'utf-8' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     let stdout = '';
     let stderr = '';
 
@@ -151,6 +172,37 @@ export function formatOptimisedSquadForPrompt(result: OptimizedSquadResult): str
     lines.push('');
   }
 
+  if (result.pool?.length) {
+    const squadIds = new Set((result.squad ?? []).map((p) => p.player_id));
+    const extras = result.pool.filter((p) => !squadIds.has(p.player_id));
+    const byPosExtra: Record<string, OptimizedSquadPlayer[]> = { GK: [], DEF: [], MID: [], FWD: [] };
+    for (const p of extras) byPosExtra[p.position].push(p);
+
+    lines.push(`=== EXTENDED CANDIDATE POOL (${result.pool.length} ranked total, ${extras.length} beyond the squad above) ===`);
+    for (const pos of ['GK', 'DEF', 'MID', 'FWD'] as const) {
+      if (!byPosExtra[pos].length) continue;
+      lines.push(`${pos}:`);
+      for (const p of byPosExtra[pos]) {
+        lines.push(
+          `  ${p.web_name} (${p.team}) · £${p.cost.toFixed(1)}m · ` +
+          `xPts 5GW total ${p.predicted_pts_gw5.toFixed(2)} · ${p.ownership_percent.toFixed(1)}% owned`,
+        );
+      }
+    }
+    lines.push('');
+    lines.push(
+      'INSTRUCTION: The 15-man squad above is the one ILP-optimal, budget-valid ' +
+      'squad. The extended pool is a ranked shortlist of further good candidates ' +
+      '— NOT a second valid squad (no budget/club-limit check was applied to it). ' +
+      'By default just present the 15-man squad. If the user explicitly asked to ' +
+      'see more players than 15, or asked for a specific number, or asked for ' +
+      '"more"/"fewer" options, draw additional picks from this pool (by position, ' +
+      'highest ranked first) to match what they asked for — do not invent players ' +
+      'outside the squad + pool data given here.',
+    );
+    lines.push('');
+  }
+
   lines.push(`Profile-derived weights used:`);
   if (result.weights) {
     for (const [k, v] of Object.entries(result.weights)) {
@@ -161,11 +213,26 @@ export function formatOptimisedSquadForPrompt(result: OptimizedSquadResult): str
   lines.push('INSTRUCTION: Present this squad clearly grouped by position.');
   lines.push('Mention budget usage, the captaincy candidate (highest xPts forward/mid),');
   lines.push('and explain WHY each premium-priced pick fits the user\'s profile.');
-  lines.push('For each DEF/GK, explicitly mention whether their value comes mainly from');
-  lines.push('their team\'s defence (clean sheets) or from playing in an attacking team');
-  lines.push('(goal/assist threat) — use the "value_source" hint shown next to each player above.');
-  lines.push('For each MID/FWD, where a "value_source" hint is present, mention whether it\'s because');
-  lines.push('their team has been in good attacking form recently, or has a strong season-long attacking record.');
+
+  // Only ask for the value-source narration when the optimiser actually emitted
+  // one. It tags a player only when a component clearly dominates, so on many
+  // squads the field is null for everyone — and an unconditional "explicitly
+  // mention whether their value comes from X or Y" instruction then leaves the
+  // model a labelled slot with nothing to put in it, which it fills by
+  // inventing plausible-sounding sources. Ask only for what exists.
+  const hasValueSource = result.squad.some((p) => p.value_source !== null);
+  if (hasValueSource) {
+    lines.push('Some players above carry a "value driven by…" note. Where such a note is');
+    lines.push('present, mention what is driving that pick (team defence and clean-sheet');
+    lines.push('potential, attacking threat, recent team form, or season-long attacking');
+    lines.push('strength). Do NOT invent or guess a value source for any player that has');
+    lines.push('no such note — simply omit it for those players.');
+  } else {
+    lines.push('No per-player "value driven by…" notes were produced for this squad, so do');
+    lines.push('NOT attribute a value source to any player. Justify picks only from the');
+    lines.push('figures shown above (xPts, price, playing probability, confidence, ownership).');
+  }
+
   lines.push('Frame it as a STARTING POINT — the user should adjust based on personal preferences.');
 
   return lines.join('\n');

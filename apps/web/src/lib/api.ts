@@ -28,7 +28,14 @@ export async function apiFetch<T>(
     credentials: 'include',
   });
 
-  if (res.status === 401 && _retry) {
+  // A 401 from /auth/* means "these credentials are wrong", not "your session
+  // expired". Refreshing can't help, and the redirect below would reload the
+  // page and wipe the error message the sign-in form is about to render —
+  // leaving the user with an empty form and no explanation. Let it fall
+  // through to the normal error path so the caller can display it.
+  const isCredentialCheck = path.startsWith('/auth/');
+
+  if (res.status === 401 && _retry && !isCredentialCheck) {
     const refreshed = await attemptRefresh();
     if (refreshed) return apiFetch<T>(path, init, false);
     if (typeof window !== 'undefined') window.location.href = '/auth';

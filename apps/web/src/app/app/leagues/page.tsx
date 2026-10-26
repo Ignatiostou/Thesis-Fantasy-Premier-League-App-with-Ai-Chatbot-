@@ -39,7 +39,7 @@ const secondaryBtn: React.CSSProperties = {
   borderRadius: 9,
   border: "1px solid rgba(255,255,255,.1)",
   background: "rgba(255,255,255,.04)",
-  color: "rgba(255,255,255,.45)",
+  color: "rgba(255,255,255,.78)",
   fontFamily: "'Barlow Condensed',sans-serif",
   fontWeight: 700,
   fontSize: 12,
@@ -160,7 +160,7 @@ export default function LeaguesPage() {
             padding-right: 10px !important;
           }
         }
-        input::placeholder { color: rgba(255,255,255,.22); }
+        input::placeholder { color: rgba(255,255,255,.5); }
         input:focus { border-color: ${ACCENT}44 !important; outline: none; }
       `}</style>
 
@@ -270,7 +270,7 @@ export default function LeaguesPage() {
                   <div style={{ fontSize: 32, marginBottom: 10 }}>🏆</div>
                   <div
                     style={{
-                      color: "rgba(255,255,255,.45)",
+                      color: "rgba(255,255,255,.7)",
                       fontSize: 13,
                       fontFamily: "'Barlow',sans-serif",
                       lineHeight: 1.5,
@@ -303,7 +303,7 @@ export default function LeaguesPage() {
                     background: "rgba(255,255,255,.02)",
                     border: "1px solid rgba(255,255,255,.06)",
                     borderRadius: 14,
-                    color: "rgba(255,255,255,.2)",
+                    color: "rgba(255,255,255,.5)",
                     fontFamily: "'Barlow',sans-serif",
                     fontSize: 13,
                   }}
@@ -375,8 +375,8 @@ export default function LeaguesPage() {
                       </div>
                       <div
                         style={{
-                          color: "rgba(255,255,255,.3)",
-                          fontSize: 10,
+                          color: "rgba(255,255,255,.6)",
+                          fontSize: 11,
                           fontFamily: "'Barlow',sans-serif",
                         }}
                       >
@@ -427,7 +427,7 @@ export default function LeaguesPage() {
                             background: on
                               ? `${ACCENT}12`
                               : "rgba(255,255,255,.03)",
-                            color: on ? ACCENT : "rgba(255,255,255,.38)",
+                            color: on ? ACCENT : "rgba(255,255,255,.72)",
                             fontFamily: "'Barlow Condensed',sans-serif",
                             fontWeight: 700,
                             fontSize: 11,
@@ -457,7 +457,7 @@ export default function LeaguesPage() {
                         style={{
                           padding: "32px 0",
                           textAlign: "center",
-                          color: "rgba(255,255,255,.2)",
+                          color: "rgba(255,255,255,.5)",
                           fontFamily: "'Barlow',sans-serif",
                           fontSize: 13,
                         }}
@@ -503,7 +503,7 @@ export default function LeaguesPage() {
                         >
                           <span
                             style={{
-                              color: "rgba(255,255,255,.35)",
+                              color: "rgba(255,255,255,.65)",
                               fontSize: 11,
                               fontFamily: "'Barlow',sans-serif",
                             }}

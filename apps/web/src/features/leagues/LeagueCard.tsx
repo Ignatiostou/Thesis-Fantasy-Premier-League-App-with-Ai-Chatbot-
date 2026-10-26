@@ -29,8 +29,8 @@ export default function LeagueCard({ league, selected, onClick }: Props) {
       <div style={{ color: selected ? ACCENT : "rgba(255,255,255,.88)", fontSize: 14, fontWeight: 900, letterSpacing: ".03em", marginBottom: 3 }}>
         {league.name}
       </div>
-      <div style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontFamily: "'Barlow',sans-serif" }}>
-        Code: <span style={{ color: "rgba(255,255,255,.5)", fontWeight: 600 }}>{league.code}</span>
+      <div style={{ color: "rgba(255,255,255,.6)", fontSize: 11, fontFamily: "'Barlow',sans-serif" }}>
+        Code: <span style={{ color: "rgba(255,255,255,.85)", fontWeight: 600 }}>{league.code}</span>
       </div>
     </div>
   );

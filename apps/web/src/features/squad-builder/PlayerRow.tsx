@@ -31,8 +31,8 @@ export default function PlayerRow({ player, isSelected, canAdd, onToggle }: Prop
       onClick={() => clickable && onToggle(player)}
       disabled={!clickable}
       style={{
-        display: "grid", gridTemplateColumns: "18px 1fr 38px 20px",
-        alignItems: "center", gap: 6, padding: "7px 9px", borderRadius: 8,
+        display: "grid", gridTemplateColumns: "19px 1fr 42px 21px",
+        alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8,
         width: "100%", textAlign: "left",
         cursor: clickable ? "pointer" : "not-allowed",
         border: isSelected ? `1px solid ${c}55` : "1px solid rgba(255,255,255,.05)",
@@ -44,41 +44,55 @@ export default function PlayerRow({ player, isSelected, canAdd, onToggle }: Prop
     >
       {/* Position badge */}
       <div style={{
-        width: 16, height: 16, borderRadius: 4,
+        width: 18, height: 18, borderRadius: 4,
         background: `${c}20`, border: `1px solid ${c}40`,
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 7, fontWeight: 900, color: c, flexShrink: 0,
+        fontSize: 8, fontWeight: 900, color: c, flexShrink: 0,
       }}>
         {POS_LABEL[player.position]}
       </div>
 
-      {/* Name + club */}
+      {/* Name + club + price */}
       <div style={{ minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ color: "white", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.2 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ color: "#ffffff", fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.25, letterSpacing: ".01em" }}>
             {player.webName}
           </span>
           {player.status !== "a" && (
-            <span style={{ width: 4, height: 4, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
+            <span style={{ width: 4.5, height: 4.5, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
           )}
         </div>
-        <div style={{ color: "#374f62", fontSize: 9, fontFamily: "'Barlow',sans-serif", lineHeight: 1 }}>
-          {player.team.shortName} · £{(player.nowCost / 10).toFixed(1)}m
+        <div style={{ display: "flex", alignItems: "baseline", gap: 5, marginTop: 2, fontFamily: "'Barlow',sans-serif", lineHeight: 1 }}>
+          <span style={{ color: "#8ea9bd", fontSize: 10.5, fontWeight: 500 }}>
+            {player.team.shortName}
+          </span>
+          <span style={{ color: "#3d5568", fontSize: 10 }}>·</span>
+          {/* Price gets its own weight/colour — it is a primary decision input,
+              not secondary metadata like the club abbreviation. */}
+          <span style={{ color: "#e8f1f7", fontSize: 11.5, fontWeight: 700 }}>
+            £{(player.nowCost / 10).toFixed(1)}m
+          </span>
         </div>
       </div>
 
-      {/* Season points */}
-      <div style={{ textAlign: "right", color: "#374f62", fontSize: 9, fontWeight: 700 }}>
-        {player.totalPoints ?? 0}
+      {/* Last season's points — the total FPL carries over, so it reads 0 for
+          everyone until the first gameweek is scored, then climbs weekly. */}
+      <div style={{ textAlign: "right", lineHeight: 1 }}>
+        <div style={{ color: "#e8f1f7", fontSize: 13.5, fontWeight: 800 }}>
+          {player.totalPoints ?? 0}
+        </div>
+        <div style={{ color: "#5b7386", fontSize: 7.5, fontWeight: 700, letterSpacing: ".14em", marginTop: 2 }}>
+          PTS
+        </div>
       </div>
 
       {/* Add / remove toggle */}
       <div style={{
-        width: 18, height: 18, borderRadius: "50%",
+        width: 20, height: 20, borderRadius: "50%",
         background: isSelected ? "#ef444418" : `${c}18`,
         border: `1.5px solid ${isSelected ? "#ef4444" : c}`,
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 13, fontWeight: 900,
+        fontSize: 14, fontWeight: 900,
         color: isSelected ? "#ef4444" : c,
         flexShrink: 0, transition: "all .12s",
       }}>

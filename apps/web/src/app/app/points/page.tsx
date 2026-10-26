@@ -109,7 +109,7 @@ export default function PointsPage() {
           {live?.team && (
             <div
               style={{
-                color: "rgba(255,255,255,.3)",
+                color: "rgba(255,255,255,.62)",
                 fontSize: 11,
                 fontFamily: "'Barlow',sans-serif",
                 marginTop: 4,
@@ -183,7 +183,7 @@ export default function PointsPage() {
                   borderRadius: 9,
                   border: `1px solid ${on ? ACCENT + "44" : "rgba(255,255,255,.08)"}`,
                   background: on ? `${ACCENT}14` : "rgba(255,255,255,.03)",
-                  color: on ? ACCENT : "rgba(255,255,255,.4)",
+                  color: on ? ACCENT : "rgba(255,255,255,.72)",
                   fontFamily: "'Barlow Condensed',sans-serif",
                   fontWeight: 700,
                   fontSize: 12,
@@ -226,8 +226,8 @@ export default function PointsPage() {
                     <div style={{ textAlign: "right" }}>
                       <div
                         style={{
-                          color: "rgba(255,255,255,.28)",
-                          fontSize: 8,
+                          color: "rgba(255,255,255,.58)",
+                          fontSize: 10,
                           fontFamily: "'Barlow',sans-serif",
                         }}
                       >
@@ -247,8 +247,8 @@ export default function PointsPage() {
                   <div style={{ textAlign: "right" }}>
                     <div
                       style={{
-                        color: "rgba(255,255,255,.28)",
-                        fontSize: 8,
+                        color: "rgba(255,255,255,.58)",
+                        fontSize: 10,
                         fontFamily: "'Barlow',sans-serif",
                       }}
                     >
@@ -270,8 +270,8 @@ export default function PointsPage() {
                 {live && (
                   <div
                     style={{
-                      color: "rgba(255,255,255,.18)",
-                      fontSize: 9,
+                      color: "rgba(255,255,255,.45)",
+                      fontSize: 10,
                       fontFamily: "'Barlow',sans-serif",
                       textAlign: "right",
                       paddingRight: 14,
@@ -287,7 +287,7 @@ export default function PointsPage() {
                 style={{
                   padding: "48px 0",
                   textAlign: "center",
-                  color: "rgba(255,255,255,.2)",
+                  color: "rgba(255,255,255,.5)",
                   fontFamily: "'Barlow',sans-serif",
                   fontSize: 13,
                 }}
@@ -316,8 +316,8 @@ export default function PointsPage() {
                 >
                   <div
                     style={{
-                      color: "rgba(255,255,255,.28)",
-                      fontSize: 9,
+                      color: "rgba(255,255,255,.6)",
+                      fontSize: 10,
                       fontWeight: 700,
                       letterSpacing: ".2em",
                       textTransform: "uppercase",
@@ -352,8 +352,8 @@ export default function PointsPage() {
                       <div
                         key={h}
                         style={{
-                          color: "rgba(255,255,255,.28)",
-                          fontSize: 8,
+                          color: "rgba(255,255,255,.6)",
+                          fontSize: 10,
                           fontWeight: 700,
                           letterSpacing: ".15em",
                           textTransform: "uppercase",
@@ -382,8 +382,8 @@ export default function PointsPage() {
                       >
                         <div
                           style={{
-                            color: "rgba(255,255,255,.5)",
-                            fontSize: 11,
+                            color: "rgba(255,255,255,.8)",
+                            fontSize: 12,
                             fontWeight: 700,
                             textAlign: "right",
                           }}
@@ -392,8 +392,8 @@ export default function PointsPage() {
                         </div>
                         <div
                           style={{
-                            color: cd ? cd.color : "rgba(255,255,255,.15)",
-                            fontSize: 10,
+                            color: cd ? cd.color : "rgba(255,255,255,.4)",
+                            fontSize: 11,
                             fontFamily: "'Barlow',sans-serif",
                           }}
                         >
@@ -403,8 +403,8 @@ export default function PointsPage() {
                           style={{
                             color: s.transferHits
                               ? "#ef4444"
-                              : "rgba(255,255,255,.2)",
-                            fontSize: 11,
+                              : "rgba(255,255,255,.45)",
+                            fontSize: 12,
                             fontWeight: 700,
                             textAlign: "right",
                           }}
@@ -413,8 +413,8 @@ export default function PointsPage() {
                         </div>
                         <div
                           style={{
-                            color: "rgba(255,255,255,.35)",
-                            fontSize: 11,
+                            color: "rgba(255,255,255,.65)",
+                            fontSize: 12,
                             textAlign: "right",
                             fontFamily: "'Barlow',sans-serif",
                           }}
@@ -441,7 +441,7 @@ export default function PointsPage() {
                 style={{
                   padding: "48px 0",
                   textAlign: "center",
-                  color: "rgba(255,255,255,.2)",
+                  color: "rgba(255,255,255,.5)",
                   fontFamily: "'Barlow',sans-serif",
                   fontSize: 13,
                 }}

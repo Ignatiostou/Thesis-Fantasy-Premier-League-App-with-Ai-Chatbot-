@@ -6,7 +6,8 @@ export interface PlayerPredictionDto {
   club:             string;
   position:         'GK' | 'DEF' | 'MID' | 'FWD' | 'UNK';
   gameweek:         number;
-  predictedPtsGw1:  number;
+  predictedPtsGw1:  number;      // EXPECTED points — appearance risk included
+  predictedPtsIfStarts?: number; // points if he appears; = predictedPtsGw1 / probPlaying
   predictedPtsGw3:  number;
   predictedPtsGw5:  number;
   predictedMinutes: number;

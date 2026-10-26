@@ -13,7 +13,10 @@ def get_logger(name: str) -> logging.Logger:
     level = getattr(logging, settings.log_level.upper(), logging.INFO)
     logger.setLevel(level)
 
-    handler = logging.StreamHandler(sys.stdout)
+    # stderr, not stdout — scripts that print structured output to stdout
+    # (e.g. optimize_initial_squad.py --json-out, for the TS spawn wrapper to
+    # JSON.parse) would otherwise get log lines interleaved into that stream.
+    handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(level)
 
     formatter = logging.Formatter(

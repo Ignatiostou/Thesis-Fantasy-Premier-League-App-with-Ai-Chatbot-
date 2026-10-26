@@ -55,12 +55,15 @@ function computeCaptaincyScore(
 ) {
   const w = ctx.weights;
   const minutesMul = Math.max(0.15, p.prob60PlusMins);
-  const playMul    = Math.max(0.15, p.probPlaying);
   const confMul    =
     p.confidence === 'HIGH'   ? 1.08 :
     p.confidence === 'MEDIUM' ? 1.00 : 0.75;
 
-  const base = p.predictedPtsGw1 * playMul * minutesMul * confMul;
+  // predictedPtsGw1 already carries the appearance probability, so the old
+  // extra playMul term applied it twice and buried nailed-on premiums beneath
+  // safer but lower-ceiling picks. The 60-minute term stays: an early
+  // substitution wastes the armband over and above the points lost.
+  const base = p.predictedPtsGw1 * minutesMul * confMul;
 
   let ownMul = 1.0, oppMul = 1.0, combined = 1.0, narrative = '';
   const teamId = ctx.teamIdByPlayerId?.get(p.playerId);

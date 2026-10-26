@@ -22,6 +22,16 @@ function round4(value: number | null | undefined): number {
   return Number((value ?? 0).toFixed(4));
 }
 
+/**
+ * Points the player returns when he actually appears. Falls back to dividing
+ * the expected value by the appearance probability for predictions written
+ * before the conditional model split.
+ */
+export function ptsIfStarts(p: PlayerPredictionDto): number {
+  if (p.predictedPtsIfStarts != null) return p.predictedPtsIfStarts;
+  return p.probPlaying > 0.05 ? p.predictedPtsGw1 / p.probPlaying : p.predictedPtsGw1;
+}
+
 function toDto(row: any): PlayerPredictionDto {
   return {
     playerId:         row.playerId,
@@ -30,6 +40,9 @@ function toDto(row: any): PlayerPredictionDto {
     position:         POSITION_LABEL[row.player?.position] ?? 'UNK',
     gameweek:         row.gameweek,
     predictedPtsGw1:  round2(row.predictedPtsGw1),
+    predictedPtsIfStarts: row.predictedPtsIfStarts != null
+      ? round2(row.predictedPtsIfStarts)
+      : undefined,
     predictedPtsGw3:  round2(row.predictedPtsGw3),
     predictedPtsGw5:  round2(row.predictedPtsGw5),
     predictedMinutes: round2(row.predictedMinutes),
@@ -149,12 +162,16 @@ export async function buildSquadPredictionSummary(
     };
   }
 
-  // Captain candidates: composite score penalises players who might not play
+  // Captain candidates: composite score penalises players who might not play.
+  // predictedPtsGw1 is ALREADY the expected value — multiplying by probPlaying
+  // again squared the appearance penalty and pushed nailed-on premiums down the
+  // list. Only the 60-minute term is applied on top, since a captain who is
+  // subbed early wastes the armband beyond simply not scoring.
   const topCaptainCandidates = [...players]
     .filter((p) => p.confidence !== 'LOW')
     .sort((a, b) => {
-      const scoreA = a.predictedPtsGw1 * a.probPlaying * Math.max(a.prob60PlusMins, 0.2);
-      const scoreB = b.predictedPtsGw1 * b.probPlaying * Math.max(b.prob60PlusMins, 0.2);
+      const scoreA = a.predictedPtsGw1 * Math.max(a.prob60PlusMins, 0.2);
+      const scoreB = b.predictedPtsGw1 * Math.max(b.prob60PlusMins, 0.2);
       return scoreB - scoreA;
     })
     .slice(0, 5);
@@ -174,9 +191,13 @@ export async function buildSquadPredictionSummary(
     .sort((a, b) => a.predictedMinutes - b.predictedMinutes)
     .slice(0, 6);
 
-  // Weak links: low projected output over next 1 and 3 GWs
+  // Weak links: genuinely low output when they DO play. Judged on the
+  // conditional projection, not the expected one — a good player carrying
+  // rotation risk is a rotation risk (reported just above), not a weak link,
+  // and testing the expected value against a 2.5 threshold flagged nearly the
+  // whole squad because that value averages ~1.5 across the player pool.
   const weakLinks = [...players]
-    .filter((p) => p.predictedPtsGw1 < 2.5 || p.predictedPtsGw3 < 7)
+    .filter((p) => ptsIfStarts(p) < 2.5 || p.predictedPtsGw3 < 7)
     .sort((a, b) => a.predictedPtsGw3 - b.predictedPtsGw3)
     .slice(0, 6);
 

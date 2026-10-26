@@ -38,7 +38,7 @@ def main() -> None:
                 logger.info("No upcoming gameweek to predict — season complete.")
                 return
 
-        stage_predict(target_gw)
+        stage_predict(target_gw, provisional=True)
         stage_upsert(target_gw)
         logger.info("Predictions for GW%d stored.", target_gw)
     finally:

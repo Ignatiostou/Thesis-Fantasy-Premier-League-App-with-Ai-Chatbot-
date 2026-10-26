@@ -157,6 +157,12 @@ export async function getPlayers(
   const skip = (page - 1) * limit;
 
   const where: any = {
+    // Excludes ids the FPL API no longer returns — most commonly a player
+    // reissued a new element id (transfer / season rollover), leaving the
+    // old id's row behind (never deleted — picks/transfers/stats reference
+    // it by FK) but no longer a real, pickable player. Without this filter
+    // the same person can appear twice under two different ids/clubs/prices.
+    isActiveInFpl: true,
     ...(teamId ? { teamId } : {}),
     ...(position ? { position } : {}),
     ...(q?.trim()
@@ -181,6 +187,47 @@ export async function getPlayers(
   };
 
   const orderBy = buildPlayerOrderBy(sortBy);
+
+  // With a search term, relevance beats the global sort. Ordering purely by
+  // points meant typing "T" listed the highest scorers that merely contained a
+  // "t" somewhere — including via their club name — so the player actually
+  // being typed stayed buried until almost the whole name was entered.
+  // Matches are few enough to rank in memory and paginate afterwards.
+  if (q?.trim()) {
+    const term = q.trim().toLowerCase();
+
+    const matches = await prisma.fplPlayer.findMany({
+      where,
+      orderBy,
+      include: { team: true },
+      take: 500,
+    });
+
+    const rank = (p: any): number => {
+      const web = (p.webName ?? '').toLowerCase();
+      const first = (p.firstName ?? '').toLowerCase();
+      const second = (p.secondName ?? '').toLowerCase();
+      if (web.startsWith(term)) return 0;
+      if (second.startsWith(term) || first.startsWith(term)) return 1;
+      if (web.includes(term)) return 2;
+      if (second.includes(term) || first.includes(term)) return 3;
+      return 4;                                   // matched only on club
+    };
+
+    const ranked = matches
+      .map((p, i) => ({ p, r: rank(p), i }))
+      // Stable within a rank: keeps the requested sort (points by default).
+      .sort((a, b) => a.r - b.r || a.i - b.i)
+      .map((x) => x.p);
+
+    return {
+      items: ranked.slice(skip, skip + limit),
+      total: ranked.length,
+      page,
+      limit,
+      hasMore: skip + limit < ranked.length,
+    };
+  }
 
   const [total, items] = await Promise.all([
     prisma.fplPlayer.count({ where }),
@@ -207,7 +254,7 @@ export async function getPlayers(
 export async function getFixtures(query: FixturesQuery) {
   const { event, teamId } = query;
 
-  return prisma.fplFixture.findMany({
+  const fixtures = await prisma.fplFixture.findMany({
     where: {
       ...(event ? { event } : {}),
       ...(teamId ? { OR: [{ teamHId: teamId }, { teamAId: teamId }] } : {}),
@@ -215,4 +262,13 @@ export async function getFixtures(query: FixturesQuery) {
     orderBy: { kickoffTime: 'asc' },
     include: { teamH: true, teamA: true },
   });
+
+  // `finished` only flips once FPL confirms bonus points, which can lag hours
+  // behind the final whistle — a match can sit at `finished: false` for a day+
+  // with a locked-in score. `finished_provisional` (already in the raw payload
+  // we store) flips at full time; that's what should drive "show the score".
+  return fixtures.map((f) => ({
+    ...f,
+    finishedProvisional: (f.raw as any)?.finished_provisional ?? f.finished,
+  }));
 }

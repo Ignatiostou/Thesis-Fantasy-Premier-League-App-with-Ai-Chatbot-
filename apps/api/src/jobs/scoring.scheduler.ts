@@ -1,69 +1,77 @@
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Watches for gameweeks that have finished but haven't been scored yet.
-// Runs every 5 minutes. When it detects a finished GW with no scores, it:
-//   1. Syncs live player stats from the FPL API
-//   2. Calculates scores for all teams
-//   3. Marks the GW as processed (via a simple in-memory + DB check)
-//
-// Relies on: points.service.calculateAllTeamsForGameweek
-//            points-sync.service.syncPlayerGameweekStats
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { prisma } from '../db/prisma.js';
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
-// In-memory set of GW IDs we've already scored this process lifetime.
-// Prevents double-scoring on rapid restarts.
-const scoredGws = new Set<number>();
+// In-memory mirror of status rows with isFinal=true, so quiet ticks skip the
+// per-gameweek status query. Safe across restarts: it is rebuilt from the DB.
+const finalScoredGws = new Set<number>();
 
-async function scoreFinishedGameweeks() {
-  // Find gameweeks that are marked finished
+type ScoringPhase = 'provisional' | 'final';
+
+function isDataChecked(raw: unknown): boolean {
+  return typeof raw === 'object' && raw !== null && (raw as { data_checked?: unknown }).data_checked === true;
+}
+
+async function syncAndScore(gameweek: number, phase: ScoringPhase) {
+  // Small delay to avoid deadlock with the FPL sync job which also writes fplPlayer
+  await new Promise((r) => setTimeout(r, 2000));
+
+  // 1. Sync latest player stats from FPL live API
+  const { syncPlayerGameweekStats } = await import('../modules/points/points-sync.service.js');
+  const syncResult = await syncPlayerGameweekStats(gameweek);
+  console.log(`[Scoring] GW${gameweek} stats synced (${phase}) — ${syncResult.upserted} players`);
+
+  // 2. Score all teams
+  const { calculateAllTeamsForGameweek } = await import('../modules/points/points.service.js');
+  const scoreResult = await calculateAllTeamsForGameweek(gameweek);
+  console.log(`[Scoring] GW${gameweek} scored (${phase}) — ${scoreResult.processedTeams} teams`);
+}
+
+export async function scoreFinishedGameweeks() {
   const finishedEvents = await prisma.fplEvent.findMany({
     where: { finished: true },
-    select: { id: true, name: true },
+    select: { id: true, raw: true },
     orderBy: { id: 'asc' },
   });
 
   for (const event of finishedEvents) {
-    if (scoredGws.has(event.id)) continue;
+    if (finalScoredGws.has(event.id)) continue;
 
-    // Check if any team already has a score for this GW
-    const existingScores = await prisma.userGameweekScore.count({
+    const status = await prisma.gameweekScoringStatus.findUnique({
       where: { gameweek: event.id },
     });
 
-    // Check how many teams exist
-    const teamCount = await prisma.userTeam.count();
-
-    // If scores already exist for all teams, mark as done and skip
-    if (teamCount > 0 && existingScores >= teamCount) {
-      console.log(`[Scoring] GW${event.id} already fully scored (${existingScores}/${teamCount} teams) — skipping`);
-      scoredGws.add(event.id);
+    if (status?.isFinal) {
+      finalScoredGws.add(event.id);
       continue;
     }
 
-    console.log(`[Scoring] GW${event.id} finished — scoring ${teamCount} teams…`);
+    const dataChecked = isDataChecked(event.raw);
 
-    // Small delay to avoid deadlock with the FPL sync job which also writes fplPlayer
-    await new Promise((r) => setTimeout(r, 2000));
+    // Already provisionally scored and FPL hasn't finalized the data yet —
+    // nothing new to compute, wait for data_checked.
+    if (status && !dataChecked) continue;
+
+    const phase: ScoringPhase = dataChecked ? 'final' : 'provisional';
+    console.log(
+      status
+        ? `[Scoring] GW${event.id} data finalized — re-scoring (final)…`
+        : `[Scoring] GW${event.id} finished — scoring (${phase})…`,
+    );
 
     try {
-      // 1. Sync latest player stats from FPL live API
-      const { syncPlayerGameweekStats } = await import('../modules/points/points-sync.service.js');
-      const syncResult = await syncPlayerGameweekStats(event.id);
-      console.log(`[Scoring] GW${event.id} stats synced — ${syncResult.upserted} players`);
+      await syncAndScore(event.id, phase);
 
-      // 2. Score all teams
-      const { calculateAllTeamsForGameweek } = await import('../modules/points/points.service.js');
-      const scoreResult = await calculateAllTeamsForGameweek(event.id);
-      console.log(`[Scoring] GW${event.id} scored — ${scoreResult.processedTeams} teams`);
+      await prisma.gameweekScoringStatus.upsert({
+        where: { gameweek: event.id },
+        update: { isFinal: dataChecked },
+        create: { gameweek: event.id, isFinal: dataChecked },
+      });
 
-      scoredGws.add(event.id);
+      if (dataChecked) finalScoredGws.add(event.id);
     } catch (err) {
-      console.error(`[Scoring] GW${event.id} scoring failed:`, err);
-      // Don't add to scoredGws — will retry on next poll
+      console.error(`[Scoring] GW${event.id} ${phase} scoring failed:`, err);
+      // Status not updated — will retry on next poll
     }
   }
 }
@@ -76,7 +84,7 @@ export function startScoringScheduler() {
     return;
   }
 
-  console.log('[Scoring Scheduler] Starting — polling every 5 min for finished GWs');
+  console.log('[Scoring Scheduler] Starting — polling every 5 min (provisional on finished, final on data_checked)');
 
   // Run immediately on boot to catch any GWs we missed while offline
   scoreFinishedGameweeks().catch((err) =>

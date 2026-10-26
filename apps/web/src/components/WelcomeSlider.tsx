@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { currentSeasonLabel } from "@/lib/constants";
 
 const WELCOME_SEEN_KEY = "fpl_welcome_seen_v1";
 
@@ -10,16 +11,16 @@ const slides = [
     id: 1,
     eyebrow: "Welcome to",
     title: "Fantasy\nPremier\nLeague",
-    body: "Step into the dugout. You're no longer just a fan — you're the manager. Build your squad, outmaneuver your rivals, and chase glory across every matchweek of the season.",
+    body: "Step into the dugout. You're no longer just a fan.You're the manager. Build your squad, outmaneuver your rivals, and chase glory across every matchweek of the season.",
     accent: "#00FF87",
     icon: "⚽",
-    stat: { label: "Season 2026/27", value: "38 Gameweeks" },
+    stat: { label: `Season ${currentSeasonLabel()}`, value: "38 Gameweeks" },
   },
   {
     id: 2,
     eyebrow: "Build Your",
     title: "Dream\nSquad",
-    body: "Select 15 players — 2 goalkeepers, 5 defenders, 5 midfielders, and 3 forwards — from any Premier League club, within your £100m budget.",
+    body: "Select 15 players:2 goalkeepers, 5 defenders, 5 midfielders, and 3 forwards from any Premier League club, within your £100m budget.",
     accent: "#38BDF8",
     icon: "🧑‍🤝‍🧑",
     stat: { label: "Total Players", value: "15 Picks" },
@@ -37,7 +38,7 @@ const slides = [
     id: 4,
     eyebrow: "Manage",
     title: "Transfers\n& Chips",
-    body: "1 free transfer per gameweek. Use your chips wisely — Wildcard, Bench Boost, Triple Captain, Free Hit — to surge the rankings when it matters most.",
+    body: "1 free transfer per gameweek. Use your chips wisely:Wildcard, Bench Boost, Triple Captain, Free Hit to surge the rankings when it matters most.",
     accent: "#F97316",
     icon: "🔄",
     stat: { label: "Free Transfers", value: "1 / Week" },
@@ -55,7 +56,7 @@ const slides = [
     id: 6,
     eyebrow: "Are You",
     title: "Ready to\nMake Your\nMove?",
-    body: "The whistle has blown. Every decision is yours — the glory, the heartbreak, the late-night transfer regrets. Join millions worldwide.",
+    body: "The whistle has blown. Every decision is yours: the glory, the heartbreak, the late-night transfer regrets. Join millions worldwide.",
     accent: "#00FF87",
     icon: "🚀",
     stat: { label: "Global Managers", value: "11M+" },
@@ -295,7 +296,7 @@ export default function WelcomeSlider() {
             transition: "all 0.5s",
           }}
         >
-          2024 / 25
+          {currentSeasonLabel(new Date(), " / ")}
         </div>
       </div>
 

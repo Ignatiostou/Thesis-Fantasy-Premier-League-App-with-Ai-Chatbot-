@@ -3,6 +3,7 @@ import {
   ensureUserTeamPicksForGameweek,
   getEditableGameweekId,
 } from "../../utils/gameweek.js";
+import { currentSeason } from "../../utils/season.js";
 
 const BUDGET_START = 1000; // £100.0m in tenths
 const LIMITS = { GK: 2, DEF: 5, MID: 5, FWD: 3 } as const;
@@ -132,6 +133,10 @@ export async function getMyTeam(userId: string) {
     team: {
       id: team.id,
       name: team.name,
+      // budget (in tenths) and season were missing from this payload, so the
+      // dashboard computed `undefined / 10` and rendered the bank as "£NaNm".
+      budget: team.budget,
+      season: team.season,
       totalPoints: totalPointsAgg._sum.finalPoints ?? 0,
       overallRank: null,
       gameweek: gw,
@@ -186,7 +191,7 @@ export async function initializeSquad(userId: string, playerIds: number[], name?
         userId,
         name: name ?? "My FPL Team",
         budget: BUDGET_START - totalCost,
-        season: "2025-26",
+        season: currentSeason(),
       },
     });
 

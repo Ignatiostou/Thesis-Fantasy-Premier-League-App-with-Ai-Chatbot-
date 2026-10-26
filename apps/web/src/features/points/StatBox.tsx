@@ -19,12 +19,12 @@ export default function StatBox({ label, value, sub, accent, warn }: StatBoxProp
       border: `1px solid ${accent ? ACCENT + "30" : warn ? "rgba(239,68,68,.22)" : "rgba(255,255,255,.08)"}`,
       borderRadius: 12, padding: "13px 18px", textAlign: "center", minWidth: 100,
     }}>
-      <div style={{ color: "rgba(255,255,255,.35)", fontSize: 9, fontWeight: 700, letterSpacing: ".2em", textTransform: "uppercase", fontFamily: "'Barlow',sans-serif", marginBottom: 5 }}>
+      <div style={{ color: "rgba(255,255,255,.68)", fontSize: 10, fontWeight: 700, letterSpacing: ".2em", textTransform: "uppercase", fontFamily: "'Barlow',sans-serif", marginBottom: 5 }}>
         {label}
       </div>
       <div style={{ color, fontSize: 26, fontWeight: 900, lineHeight: 1 }}>{value}</div>
       {sub && (
-        <div style={{ color: "rgba(255,255,255,.3)", fontSize: 9, marginTop: 3, fontFamily: "'Barlow',sans-serif" }}>{sub}</div>
+        <div style={{ color: "rgba(255,255,255,.55)", fontSize: 10, marginTop: 3, fontFamily: "'Barlow',sans-serif" }}>{sub}</div>
       )}
     </div>
   );

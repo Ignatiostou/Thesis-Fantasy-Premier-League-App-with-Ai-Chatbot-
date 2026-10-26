@@ -13,6 +13,12 @@ Usage:
     python pipeline.py --predict-only             # skip retraining, just refresh
                                                   # predictions with the current model
     python pipeline.py --skip-train --completed-gameweek 24
+    python pipeline.py --predict-only --target-gameweek 1
+                                                  # season boundary: no GW has finished
+                                                  # yet this season (so there is nothing
+                                                  # to resolve "next GW" from) — predict
+                                                  # GW1 directly with the carried-over
+                                                  # model from last season
 
 Called by:
     - apps/ai/scripts/backfill_season.py   (initial historical backfill)
@@ -85,13 +91,14 @@ def resolve_target_gameweek(completed_gw: int | None) -> int | None:
 # ── Stages ────────────────────────────────────────────────────────────────────
 
 def stage_extract() -> None:
-    logger.info("─── Stage 1/5: extract player GW history from DB ───")
-    from data.extract_player_gw_history import extract, save
-    df = extract()
+    logger.info("─── Stage 1/5: extract player GW history (live + archived seasons) ───")
+    from data.extract_player_gw_history import extract_with_history, save
+    df = extract_with_history()
     if df.empty:
         raise RuntimeError(
-            "player_gameweek_stats is empty. Run scripts/backfill_season.py first "
-            "(or wait for the scoring scheduler to sync a finished gameweek)."
+            "player_gameweek_stats is empty and no archived seasons were found. "
+            "Run scripts/backfill_season.py first (or wait for the scoring "
+            "scheduler to sync a finished gameweek)."
         )
     save(df)
 
@@ -125,6 +132,17 @@ def _read_points_mae(meta_path: Path) -> float | None:
         return None
 
 
+def _read_points_scope(meta_path: Path) -> str | None:
+    """Which population the points model was fitted on. Absent on models trained
+    before the conditional split, which is itself the signal that the scope
+    changed."""
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        return meta.get("target_scope", "all_rows")
+    except Exception:
+        return None
+
+
 def _restore_models(backup_dir: Path) -> None:
     for name in MODEL_FILES:
         src = backup_dir / name
@@ -137,6 +155,7 @@ def stage_train() -> None:
     logger.info("─── Stage 3/5: train models (points + availability + minutes) ───")
     backup_dir = _backup_models()
     old_mae = _read_points_mae(settings.models_dir / POINTS_META) if backup_dir else None
+    old_scope = _read_points_scope(settings.models_dir / POINTS_META) if backup_dir else None
 
     from models.train_points_model import main as train_points
     from models.train_availability_model import main as train_availability
@@ -146,7 +165,18 @@ def stage_train() -> None:
 
     # ── Validation gate ──────────────────────────────────────────────────────
     new_mae = _read_points_mae(settings.models_dir / POINTS_META)
-    if old_mae is not None and new_mae is not None:
+    new_scope = _read_points_scope(settings.models_dir / POINTS_META)
+
+    if old_scope != new_scope:
+        # A played-only model predicts a larger quantity (points given an
+        # appearance) than one trained across all rows, so its MAE is naturally
+        # higher. Comparing the two would roll back a deliberate improvement.
+        logger.warning(
+            "Points model target scope changed (%s -> %s) — skipping the MAE gate, "
+            "the two are not comparable. New MAE=%.4f",
+            old_scope, new_scope, new_mae if new_mae is not None else float("nan"),
+        )
+    elif old_mae is not None and new_mae is not None:
         logger.info("Model gate: previous MAE=%.4f | new MAE=%.4f", old_mae, new_mae)
         if new_mae > old_mae * MAX_MAE_REGRESSION:
             logger.warning(
@@ -160,10 +190,10 @@ def stage_train() -> None:
         logger.info("New model accepted (no previous model to compare against). MAE=%.4f", new_mae)
 
 
-def stage_predict(target_gw: int) -> Path:
+def stage_predict(target_gw: int, provisional: bool = False) -> Path:
     logger.info("─── Stage 4/5: predict GW%d ───", target_gw)
     from inference.predict_next_gw import run_inference
-    predictions = run_inference(target_gw)
+    predictions = run_inference(target_gw, provisional=provisional)
 
     settings.ensure_artifact_dirs()
     out_path = settings.datasets_dir / f"predictions_gw{target_gw}.parquet"
@@ -186,7 +216,8 @@ def stage_upsert(target_gw: int) -> None:
 
 def run(completed_gameweek: int | None = None,
         skip_train: bool = False,
-        predict_only: bool = False) -> None:
+        predict_only: bool = False,
+        target_gameweek: int | None = None) -> None:
     from db import dispose
 
     try:
@@ -196,12 +227,23 @@ def run(completed_gameweek: int | None = None,
             if not skip_train:
                 stage_train()
 
-        target_gw = resolve_target_gameweek(completed_gameweek)
-        if target_gw is None:
-            logger.info("Pipeline finished (training only — no upcoming gameweek).")
-            return
+        if target_gameweek is not None:
+            # Explicit target — bypasses "latest finished GW + 1" resolution.
+            # Needed at a season boundary: GW1 has no prior finished gameweek
+            # to resolve from, yet it still needs predictions from whatever
+            # model was carried over from last season.
+            if not gameweek_exists(target_gameweek):
+                logger.warning("Target GW%d does not exist in fpl_events — nothing to predict.",
+                               target_gameweek)
+                return
+            target_gw = target_gameweek
+        else:
+            target_gw = resolve_target_gameweek(completed_gameweek)
+            if target_gw is None:
+                logger.info("Pipeline finished (training only — no upcoming gameweek).")
+                return
 
-        stage_predict(target_gw)
+        stage_predict(target_gw, provisional=predict_only)
         stage_upsert(target_gw)
         logger.info("Pipeline complete — predictions for GW%d are live for the chatbot.", target_gw)
     finally:
@@ -223,12 +265,18 @@ def main() -> None:
                         help="Rebuild dataset but reuse the current model")
     parser.add_argument("--predict-only", action="store_true",
                         help="Only run inference + DB upsert with the current model")
+    parser.add_argument("--target-gameweek", type=int, default=None,
+                        help="Predict this exact gameweek directly, bypassing "
+                             "completed-GW resolution. For the season boundary, "
+                             "where no GW has finished yet so there is no 'next GW' "
+                             "to resolve from.")
     args = parser.parse_args()
 
     run(
         completed_gameweek=args.completed_gameweek,
         skip_train=args.skip_train,
         predict_only=args.predict_only,
+        target_gameweek=args.target_gameweek,
     )
 
 

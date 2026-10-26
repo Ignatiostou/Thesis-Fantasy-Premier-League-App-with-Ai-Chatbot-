@@ -26,7 +26,7 @@ export async function compareMentionedPlayers(
     eligibilityMode: 'MODERATE',
   });
 
-  if (players.length < 2) {
+  if (players.length < 1) {
     // IMPROVEMENT #11: if we excluded someone, tell the manager why instead
     // of a generic "could not identify two players" message.
     if (excluded.length > 0) {
@@ -43,10 +43,12 @@ export async function compareMentionedPlayers(
       found: false,
       players: [],
       recommendation:
-        'I could not confidently identify two players to compare from the message.',
+        'I could not confidently identify a player from the message.',
     };
   }
 
+  // 1 player found → single-player profile (no A-vs-B verdict to compute).
+  // 2+ found → comparison, same as before.
   const selected = players.slice(0, 2);
 
   const mapped = selected.map((p) => {
@@ -72,10 +74,25 @@ export async function compareMentionedPlayers(
       form,
       chanceOfPlayingNextRound:p.chanceOfPlayingNextRound ?? null,
       status:                  p.status,
+      goalsScored:             p.goalsScored ?? 0,
+      assists:                 p.assists ?? 0,
+      cleanSheets:             p.cleanSheets ?? 0,
+      bonus:                   p.bonus ?? 0,
+      minutes:                 p.minutes ?? 0,
       pros,
       cons,
     };
   });
+
+  // Single player mentioned → profile only, no A-vs-B verdict to compute.
+  if (mapped.length < 2) {
+    const [only] = mapped;
+    return {
+      found: true,
+      players: mapped,
+      recommendation: `${only.webName} (${only.club}, ${only.position}) — season profile above.`,
+    };
+  }
 
   const [a, b] = mapped;
 

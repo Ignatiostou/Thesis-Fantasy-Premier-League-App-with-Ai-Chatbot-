@@ -32,6 +32,10 @@ import {
   formatWeakLinks,
 }                                     from './squad-intelligence.formatter.js';
 import { findMentionedPlayers }       from './player-search.service.js';
+import {
+  optimizeInitialSquad,
+  formatOptimisedSquadForPrompt,
+}                                     from './squad-optimizer.service.js';
 import { getEditableGameweekId }      from '../../utils/gameweek.js';
 import { prisma }                     from '../../db/prisma.js';
 import {
@@ -104,6 +108,71 @@ function joinBlocks(...blocks: string[]): string {
   return blocks.filter((b) => b.trim().length > 0).join('\n\n');
 }
 
+/**
+ * Shared no-existing-squad fallback for GENERAL_HELP and INITIAL_SQUAD.
+ *
+ * buildSquadIntelligence has nothing to work from for a user with no team
+ * yet (it's built for improving an existing squad, not building one from
+ * scratch) — both intents used to fall straight to `return null` in that
+ * case, leaving the LLM with zero real player data and no way to honor
+ * "don't invent players not in the data" when no data was given. It fell
+ * back on its own (stale, sometimes years out of date) knowledge instead.
+ *
+ * GENERAL_HELP needs this too, not just INITIAL_SQUAD: the intent
+ * classifier is keyword-based, and plenty of natural phrasings for "help me
+ * build a squad" (e.g. "help me choose forwards") don't match any specific
+ * rule and land in GENERAL_HELP, the catch-all bucket. Any of those, for a
+ * user with no team, needs the same real grounding.
+ */
+const POOL_SIZE_DEFAULT = 30;
+const POOL_SIZE_MIN     = 5;
+const POOL_SIZE_MAX     = 60;
+
+/**
+ * How many players the initial-squad candidate pool should hold — read from
+ * an explicit number in the user's message ("recommend 40 players"), a bare
+ * "more"/"fewer" ask relative to the default, or just POOL_SIZE_DEFAULT.
+ */
+function extractPoolSize(message: string): number {
+  const near = message.match(/(\d{1,3})\s*(?:players?|picks?|candidates?|options?)/i);
+  const bare = message.match(/\b(\d{1,3})\b/);
+  const n = near ? parseInt(near[1], 10) : bare ? parseInt(bare[1], 10) : null;
+  if (n !== null && n >= POOL_SIZE_MIN && n <= POOL_SIZE_MAX) return n;
+
+  if (/\b(more|bigger|wider|longer|extra)\b/i.test(message)) {
+    return Math.min(POOL_SIZE_MAX, POOL_SIZE_DEFAULT + 15);
+  }
+  if (/\b(less|fewer|smaller|shorter)\b/i.test(message)) {
+    return Math.max(POOL_SIZE_MIN, POOL_SIZE_DEFAULT - 15);
+  }
+  return POOL_SIZE_DEFAULT;
+}
+
+async function buildNoSquadFallback(
+  intent: AssistantIntent,
+  userId: string,
+  message: string,
+): Promise<RecommendationResult> {
+  const optimized = await optimizeInitialSquad({ userId, poolSize: extractPoolSize(message) });
+  if (optimized.status !== 'OPTIMAL') {
+    console.error(
+      `[RecommendationService] Initial squad optimizer returned ${optimized.status}: ` +
+      `${optimized.reason ?? 'no reason given'}`,
+    );
+  }
+
+  return {
+    intent,
+    summary: formatOptimisedSquadForPrompt(optimized),
+    structured: { optimizedSquad: optimized } as Record<string, unknown>,
+    mlBlock: null,
+    conflictResolution: {
+      primarySource: 'ML_ONLY',
+      reason: 'No existing squad to analyse — built directly from the ML-driven budget optimizer.',
+    },
+  };
+}
+
 async function getSquadPlayerIds(userId: string, gameweek: number): Promise<number[]> {
   const team = await prisma.userTeam.findUnique({
     where:  { userId },
@@ -146,29 +215,54 @@ function formatCaptainSummary(
   return lines.join('\n');
 }
 
+function formatPlayerStatBlock(label: string, p: PlayerComparisonSimpleResult['players'][number]): string[] {
+  const lines: string[] = [];
+  lines.push(`${label}: ${p.webName} (${p.club}, ${p.position})`);
+  lines.push(`  Price:        ${fmtCost(p.nowCost)}`);
+  lines.push(`  Total points: ${p.totalPoints}`);
+  lines.push(`  Goals:        ${p.goalsScored}`);
+  lines.push(`  Assists:      ${p.assists}`);
+  if (p.position === 'GK' || p.position === 'DEF') {
+    lines.push(`  Clean sheets: ${p.cleanSheets}`);
+  }
+  lines.push(`  Bonus points: ${p.bonus}`);
+  lines.push(`  Minutes:      ${p.minutes}`);
+  lines.push(`  Form:         ${p.form !== null ? p.form.toFixed(1) : 'N/A'}`);
+  lines.push(`  Availability: ${p.chanceOfPlayingNextRound !== null && p.chanceOfPlayingNextRound < 100 ? `${p.chanceOfPlayingNextRound}% chance` : 'Fit'}`);
+  lines.push(`  Status:       ${p.status !== 'a' ? `⚠️  ${p.status.toUpperCase()}` : 'Available'}`);
+  if (p.pros.length) lines.push(`  Pros: ${p.pros.join('; ')}`);
+  if (p.cons.length) lines.push(`  Cons: ${p.cons.join('; ')}`);
+  return lines;
+}
+
 function formatComparisonSummary(result: PlayerComparisonSimpleResult): string {
-  if (!result.found || result.players.length < 2) {
+  if (!result.found || result.players.length === 0) {
     return [
-      '=== PLAYER COMPARISON ===',
-      result.recommendation ?? 'Could not identify two players to compare.',
-      'Ask the manager to clarify which players they want to compare.',
+      '=== PLAYER LOOKUP ===',
+      result.recommendation ?? 'Could not identify a player from the message.',
+      'Ask the manager to clarify which player(s) they mean.',
     ].join('\n');
+  }
+
+  // Exactly one player named → a profile, not a comparison. No "Player A"
+  // framing, no verdict to force — there's nothing to compare against.
+  if (result.players.length === 1) {
+    const lines: string[] = [
+      '=== PLAYER PROFILE (rule-based) ===',
+      '',
+      ...formatPlayerStatBlock('Player', result.players[0]),
+      '',
+      'INSTRUCTION: Present these season stats and pros/cons directly — do not',
+      'invent a comparison against a player the user did not name.',
+    ];
+    return lines.join('\n');
   }
 
   const [a, b] = result.players;
   const lines: string[] = ['=== PLAYER COMPARISON (rule-based) ===', ''];
 
-  for (const [label, p] of [['Player A', a], ['Player B', b]] as const) {
-    lines.push(`${label}: ${p.webName} (${p.club}, ${p.position})`);
-    lines.push(`  Price:        ${fmtCost(p.nowCost)}`);
-    lines.push(`  Total points: ${p.totalPoints}`);
-    lines.push(`  Form:         ${p.form !== null ? p.form.toFixed(1) : 'N/A'}`);
-    lines.push(`  Availability: ${p.chanceOfPlayingNextRound !== null && p.chanceOfPlayingNextRound < 100 ? `${p.chanceOfPlayingNextRound}% chance` : 'Fit'}`);
-    lines.push(`  Status:       ${p.status !== 'a' ? `⚠️  ${p.status.toUpperCase()}` : 'Available'}`);
-    if (p.pros.length) lines.push(`  Pros: ${p.pros.join('; ')}`);
-    if (p.cons.length) lines.push(`  Cons: ${p.cons.join('; ')}`);
-    lines.push('');
-  }
+  lines.push(...formatPlayerStatBlock('Player A', a), '');
+  lines.push(...formatPlayerStatBlock('Player B', b), '');
 
   const priceDiff = Math.abs(a.nowCost - b.nowCost);
   if (priceDiff > 0) {
@@ -236,6 +330,70 @@ function formatTransferSummary(
   return lines.join('\n');
 }
 
+// ── Player comparison / single-player profile ──────────────────────────────────
+//
+// Shared by the PLAYER_COMPARISON intent AND the GENERAL_HELP fallback: a
+// message that's just player names ("Saka?", "Rogers or Havertz") often
+// scores no CAPTAINCY/TRANSFER/etc keyword and lands in GENERAL_HELP, but the
+// user clearly wants stats on those specific players, not generic squad
+// advice. Both paths build the same grounded block.
+
+async function buildPlayerComparisonResult(
+  userId:   string,
+  intent:   AssistantIntent,
+  message:  string,
+  gameweek: number,
+  squadIds: number[],
+): Promise<RecommendationResult> {
+  const mentioned  = await findMentionedPlayers(message, 4);
+  const mentionedIds = mentioned.map((p) => p.id);
+
+  const [compResult, mlBlock] = await Promise.all([
+    compareMentionedPlayers(message),
+    buildMlRecommendationBlock({
+      userId,
+      intent,
+      squadPlayerIds:    squadIds,
+      gameweek,
+      mentionedPlayerIds: mentionedIds,
+    }),
+  ]);
+
+  const resolution = resolveConflict(intent, mlBlock.available);
+
+  let heuristicProjectionLines = '';
+  if (mentioned.length >= 1) {
+    const targets = mentioned.slice(0, 2);
+    const raws = await Promise.all(
+      targets.map((m) =>
+        prisma.fplPlayer.findUnique({ where: { id: m.id }, include: { team: true } }),
+      ),
+    );
+    const found = raws.filter((r): r is NonNullable<typeof r> => r !== null);
+    if (found.length > 0) {
+      const { projectPlayer } = await import('./projection.service.js');
+      const projections = await Promise.all(found.map((r) => projectPlayer(r, gameweek)));
+      heuristicProjectionLines = joinBlocks(...projections.map(formatPlayerProjection));
+    }
+  }
+
+  return {
+    intent,
+    summary: joinBlocks(
+      mlBlock.available ? mlBlock.promptBlock : '',
+      heuristicProjectionLines,
+      formatComparisonSummary(compResult),
+      conflictInstruction(resolution),
+    ),
+    structured: {
+      comparison:  compResult,
+      mlStructured: mlBlock.structured ?? null,
+    } as Record<string, unknown>,
+    mlBlock,
+    conflictResolution: resolution,
+  };
+}
+
 // ── Main orchestrator ─────────────────────────────────────────────────────────
 
 export async function buildRecommendationContext(params: {
@@ -281,58 +439,8 @@ export async function buildRecommendationContext(params: {
       }
 
       // ── PLAYER COMPARISON ──────────────────────────────────────────────────
-      case 'PLAYER_COMPARISON': {
-        const mentioned  = await findMentionedPlayers(message, 4);
-        const mentionedIds = mentioned.map((p) => p.id);
-
-        const [compResult, mlBlock] = await Promise.all([
-          compareMentionedPlayers(message),
-          buildMlRecommendationBlock({
-            userId,
-            intent,
-            squadPlayerIds:    squadIds,
-            gameweek,
-            mentionedPlayerIds: mentionedIds,
-          }),
-        ]);
-
-        const resolution = resolveConflict(intent, mlBlock.available);
-
-        let heuristicProjectionLines = '';
-        if (mentioned.length >= 2) {
-          const [rawA, rawB] = await Promise.all([
-            prisma.fplPlayer.findUnique({ where: { id: mentioned[0].id }, include: { team: true } }),
-            prisma.fplPlayer.findUnique({ where: { id: mentioned[1].id }, include: { team: true } }),
-          ]);
-          if (rawA && rawB) {
-            const { projectPlayer } = await import('./projection.service.js');
-            const [projA, projB] = await Promise.all([
-              projectPlayer(rawA, gameweek),
-              projectPlayer(rawB, gameweek),
-            ]);
-            heuristicProjectionLines = joinBlocks(
-              formatPlayerProjection(projA),
-              formatPlayerProjection(projB),
-            );
-          }
-        }
-
-        return {
-          intent,
-          summary: joinBlocks(
-            mlBlock.available ? mlBlock.promptBlock : '',
-            heuristicProjectionLines,
-            formatComparisonSummary(compResult),
-            conflictInstruction(resolution),
-          ),
-          structured: {
-            comparison:  compResult,
-            mlStructured: mlBlock.structured ?? null,
-          } as Record<string, unknown>,
-          mlBlock,
-          conflictResolution: resolution,
-        };
-      }
+      case 'PLAYER_COMPARISON':
+        return buildPlayerComparisonResult(userId, intent, message, gameweek, squadIds);
 
       // ── TRANSFER ───────────────────────────────────────────────────────────
       case 'TRANSFER_EVALUATION':
@@ -425,15 +533,43 @@ export async function buildRecommendationContext(params: {
         };
       }
 
-      // ── GENERAL HELP / INITIAL SQUAD ───────────────────────────────────────
-      case 'GENERAL_HELP':
-      case 'INITIAL_SQUAD': {
-        const [intel, mlBlock] = await Promise.all([
-          buildSquadIntelligence(userId),
-          buildMlRecommendationBlock({ userId, intent, squadPlayerIds: squadIds, gameweek }),
-        ]);
-        if (!intel) return null;
+      // ── GENERAL HELP ───────────────────────────────────────────────────────
+      case 'GENERAL_HELP': {
+        // Keyword classification is intent-first, but a message that's just
+        // player names ("Saka?", "Rogers or Havertz") matches no CAPTAINCY/
+        // TRANSFER/etc keyword and lands here by default. Check for named
+        // players before falling back to generic squad advice — the user
+        // asked about specific players, so answer about those players.
+        const mentionedForHelp = await findMentionedPlayers(message, 4);
+        if (mentionedForHelp.length > 0) {
+          return buildPlayerComparisonResult(userId, intent, message, gameweek, squadIds);
+        }
 
+        const intel = await buildSquadIntelligence(userId);
+        if (!intel) return buildNoSquadFallback(intent, userId, message);
+
+        const mlBlock = await buildMlRecommendationBlock({ userId, intent, squadPlayerIds: squadIds, gameweek });
+        const resolution = resolveConflict(intent, mlBlock.available);
+
+        return {
+          intent,
+          summary: joinBlocks(
+            mlBlock.available ? mlBlock.promptBlock : '',
+            formatForIntent(intel, intent),
+            conflictInstruction(resolution),
+          ),
+          structured: { mlStructured: mlBlock.structured ?? null } as Record<string, unknown>,
+          mlBlock,
+          conflictResolution: resolution,
+        };
+      }
+
+      // ── INITIAL SQUAD ──────────────────────────────────────────────────────
+      case 'INITIAL_SQUAD': {
+        const intel = await buildSquadIntelligence(userId);
+        if (!intel) return buildNoSquadFallback(intent, userId, message);
+
+        const mlBlock = await buildMlRecommendationBlock({ userId, intent, squadPlayerIds: squadIds, gameweek });
         const resolution = resolveConflict(intent, mlBlock.available);
 
         return {

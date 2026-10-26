@@ -27,6 +27,53 @@ const STATUS_COLOR: Record<string, string> = {
 };
 const fmt = (c: number) => `£${(c / 10).toFixed(1)}m`;
 
+/**
+ * The API returns machine codes ("MAX_3_PER_CLUB:15"). Sentence-casing them
+ * left the club id dangling on the end and told the manager nothing about what
+ * to do next, so each code gets its own sentence, with names filled in from the
+ * squad where the code carries an id.
+ */
+function transferErrorText(
+  code: string,
+  nameOf: (playerId: number) => string,
+): string {
+  const [key, arg] = code.split(":");
+  const id = Number(arg);
+  const who = Number.isFinite(id) ? nameOf(id) : arg;
+
+  switch (key) {
+    case "NO_TEAM":
+      return "You don't have a squad for this gameweek yet.";
+    case "NO_TRANSFERS_SELECTED":
+      return "Pick a player to transfer out, then choose a replacement.";
+    case "DUPLICATE_OUT_PLAYER":
+      return "The same player is being transferred out twice.";
+    case "DUPLICATE_IN_PLAYER":
+      return "The same player is being transferred in twice.";
+    case "OUT_PLAYER_NOT_IN_TEAM":
+      return `${who} is no longer in your squad — remove that transfer and start it again.`;
+    case "IN_PLAYER_ALREADY_IN_TEAM":
+      return `${who} is already in your squad.`;
+    case "IN_PLAYER_NOT_FOUND":
+      return "That player is no longer available. Pick someone else.";
+    case "POSITION_MISMATCH":
+      return "You can only swap a player for another in the same position.";
+    case "INVALID_POSITION_COUNT":
+      return `That leaves you with the wrong number of ${POS_LABEL[id] ?? "players"}.`;
+    case "MAX_3_PER_CLUB":
+      return "That would give you 4 players from the same club — the limit is 3.";
+    case "BUDGET_EXCEEDED":
+      return "You can't afford this transfer. Free up funds or pick a cheaper replacement.";
+    case "WILDCARD_NOT_AVAILABLE":
+      return "Your wildcard has already been played for this half of the season.";
+    default:
+      return code
+        .replace(/_/g, " ")
+        .toLowerCase()
+        .replace(/^./, (c) => c.toUpperCase());
+  }
+}
+
 function PosTag({ pos }: { pos: number }) {
   const c = POS_COLOR[pos];
   return (
@@ -212,7 +259,7 @@ function SquadSlot({
           </span>
           <span
             style={{
-              color: "#9abacc",
+              color: "#c3d8e6",
               fontSize: 11,
               fontWeight: 600,
               fontFamily: "'Barlow', sans-serif",
@@ -225,7 +272,7 @@ function SquadSlot({
 
       <div
         style={{
-          color: isSelected ? ACCENT : isOut ? "#ef4444" : "#3a5a6a",
+          color: isSelected ? ACCENT : isOut ? "#ef4444" : "#8fb0c0",
           fontSize: 14,
           fontWeight: 900,
           transition: "all .15s",
@@ -353,8 +400,8 @@ function MarketRow({
         {player.totalPoints ?? 0}
         <div
           style={{
-            color: "#5a7a8a",
-            fontSize: 8,
+            color: "#9ab8c8",
+            fontSize: 10,
             fontFamily: "'Barlow', sans-serif",
           }}
         >
@@ -430,7 +477,7 @@ function CartItem({
           >
             {item.outWebName}
           </span>
-          <span style={{ color: "#5a7a8a", fontSize: 10 }}>
+          <span style={{ color: "#9ab8c8", fontSize: 10 }}>
             {fmt(item.outSellPrice)}
           </span>
         </div>
@@ -443,7 +490,7 @@ function CartItem({
             marginTop: 2,
           }}
         >
-          <span style={{ color: "#3a5a6a", fontSize: 10 }}>→</span>
+          <span style={{ color: "#8fb0c0", fontSize: 10 }}>→</span>
           <span
             style={{
               color: ACCENT,
@@ -456,7 +503,7 @@ function CartItem({
           >
             {item.inWebName}
           </span>
-          <span style={{ color: "#5a7a8a", fontSize: 10 }}>
+          <span style={{ color: "#9ab8c8", fontSize: 10 }}>
             {fmt(item.inBuyPrice)}
           </span>
           {item.isHit && (
@@ -480,7 +527,7 @@ function CartItem({
           <div
             style={{
               fontSize: 9,
-              color: diff > 0 ? "#ef4444" : diff < 0 ? ACCENT : "#5a7a8a",
+              color: diff > 0 ? "#ef4444" : diff < 0 ? ACCENT : "#9ab8c8",
               fontFamily: "'Barlow', sans-serif",
               marginTop: 2,
             }}
@@ -557,7 +604,7 @@ function HistoryRow({
           justifyContent: "center",
           fontSize: 8,
           fontWeight: 900,
-          color: "#7a9aaa",
+          color: "#aec8d6",
           flexShrink: 0,
         }}
       >
@@ -569,14 +616,14 @@ function HistoryRow({
           <span style={{ color: "#ef4444", fontSize: 12, fontWeight: 700 }}>
             {item.playerOutWebName}
           </span>
-          <span style={{ color: "#3a5a6a", fontSize: 10 }}>→</span>
+          <span style={{ color: "#8fb0c0", fontSize: 10 }}>→</span>
           <span style={{ color: ACCENT, fontSize: 12, fontWeight: 700 }}>
             {item.playerInWebName}
           </span>
         </div>
         <div
           style={{
-            color: "#5a7a8a",
+            color: "#9ab8c8",
             fontSize: 10,
             fontFamily: "'Barlow', sans-serif",
           }}
@@ -655,6 +702,11 @@ export default function TransfersPage() {
   const freeAfterCart = isWildcard
     ? Infinity
     : Math.max(0, freeRemaining - cart.length);
+
+  const playerName = (playerId: number) =>
+    picks.find((p) => p.playerId === playerId)?.webName ??
+    marketItems.find((p) => p.id === playerId)?.webName ??
+    "That player";
 
   const starters = picks.filter((p) => !p.isOnBench);
   const bench = picks
@@ -741,7 +793,7 @@ export default function TransfersPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#7a9aaa",
+          color: "#aec8d6",
           fontFamily: "'Barlow Condensed', sans-serif",
           fontSize: 16,
           letterSpacing: "0.15em",
@@ -794,7 +846,7 @@ export default function TransfersPage() {
         .c-sel option { background:#0f1724; }
         .c-sel:disabled { opacity:.35; cursor:not-allowed; }
 
-        .pg-b { min-width:26px; height:26px; border-radius:6px; padding:0 5px; border:1px solid rgba(255,255,255,.12); background:transparent; color:#9abacc; font-family:'Barlow Condensed',sans-serif; font-weight:800; font-size:11px; cursor:pointer; transition:all .15s; }
+        .pg-b { min-width:26px; height:26px; border-radius:6px; padding:0 5px; border:1px solid rgba(255,255,255,.12); background:transparent; color:#c3d8e6; font-family:'Barlow Condensed',sans-serif; font-weight:800; font-size:11px; cursor:pointer; transition:all .15s; }
         .pg-b:hover:not(:disabled) { border-color:${ACCENT}55; color:${ACCENT}; }
         .pg-b.on { background:${ACCENT}20; border-color:${ACCENT}60; color:${ACCENT}; }
         .pg-b:disabled { opacity:.25; cursor:not-allowed; }
@@ -958,7 +1010,7 @@ export default function TransfersPage() {
             {
               label: "Hit pts",
               value: `-${hitDisplay}`,
-              color: hitDisplay > 0 ? "#ef4444" : "#5a7a8a",
+              color: hitDisplay > 0 ? "#ef4444" : "#9ab8c8",
             },
             null,
             {
@@ -980,8 +1032,8 @@ export default function TransfersPage() {
               <div key={i} style={{ textAlign: "center" }}>
                 <div
                   style={{
-                    color: "#5a7a8a",
-                    fontSize: 8,
+                    color: "#9ab8c8",
+                    fontSize: 10,
                     letterSpacing: "0.15em",
                     textTransform: "uppercase",
                     fontFamily: "'Barlow',sans-serif",
@@ -1023,7 +1075,7 @@ export default function TransfersPage() {
                   background: isWildcard
                     ? "rgba(245,158,11,.15)"
                     : "rgba(255,255,255,.03)",
-                  color: isWildcard ? "#f59e0b" : "#9abacc",
+                  color: isWildcard ? "#f59e0b" : "#c3d8e6",
                   fontFamily: "'Barlow Condensed',sans-serif",
                   fontWeight: 800,
                   fontSize: 11,
@@ -1074,7 +1126,7 @@ export default function TransfersPage() {
                 className="tab-btn"
                 onClick={() => setTab(t)}
                 style={{
-                  color: tab === t ? "white" : "#5a7a8a",
+                  color: tab === t ? "white" : "#9ab8c8",
                   borderBottom:
                     tab === t ? `2px solid ${ACCENT}` : "2px solid transparent",
                 }}
@@ -1096,7 +1148,7 @@ export default function TransfersPage() {
                     borderRadius: 8,
                     background: `${ACCENT}08`,
                     border: `1px solid ${ACCENT}18`,
-                    color: "#9abacc",
+                    color: "#c3d8e6",
                     fontSize: 11,
                     fontFamily: "'Barlow',sans-serif",
                     lineHeight: 1.5,
@@ -1185,7 +1237,7 @@ export default function TransfersPage() {
                     style={{
                       fontSize: 9,
                       fontWeight: 800,
-                      color: "#7a9aaa",
+                      color: "#aec8d6",
                       letterSpacing: "0.2em",
                       textTransform: "uppercase",
                       fontFamily: "'Barlow',sans-serif",
@@ -1218,7 +1270,7 @@ export default function TransfersPage() {
                   style={{
                     textAlign: "center",
                     padding: "32px 0",
-                    color: "#3a5a6a",
+                    color: "#8fb0c0",
                     fontFamily: "'Barlow',sans-serif",
                     fontSize: 12,
                   }}
@@ -1289,7 +1341,7 @@ export default function TransfersPage() {
                   <PosTag pos={selectedOutPick.position} />
                   <span
                     style={{
-                      color: "#7a9aaa",
+                      color: "#aec8d6",
                       fontSize: 10,
                       fontFamily: "'Barlow',sans-serif",
                     }}
@@ -1302,7 +1354,7 @@ export default function TransfersPage() {
               {!selectedOutPick && (
                 <span
                   style={{
-                    color: "#9abacc",
+                    color: "#c3d8e6",
                     fontSize: 11,
                     fontWeight: 600,
                     fontFamily: "'Barlow',sans-serif",
@@ -1321,7 +1373,7 @@ export default function TransfersPage() {
                     left: 8,
                     top: "50%",
                     transform: "translateY(-50%)",
-                    color: "rgba(255,255,255,.18)",
+                    color: "rgba(255,255,255,.45)",
                     fontSize: 11,
                     pointerEvents: "none",
                   }}
@@ -1380,7 +1432,7 @@ export default function TransfersPage() {
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 10,
-                  color: "#8aaacc",
+                  color: "#b6cbe6",
                   fontFamily: "'Barlow',sans-serif",
                   fontSize: 13,
                   fontWeight: 600,
@@ -1408,7 +1460,7 @@ export default function TransfersPage() {
                 style={{
                   textAlign: "center",
                   padding: "28px 0",
-                  color: "#5a7a8a",
+                  color: "#9ab8c8",
                   fontFamily: "'Barlow',sans-serif",
                   fontSize: 12,
                 }}
@@ -1447,7 +1499,7 @@ export default function TransfersPage() {
                 b === "…" ? (
                   <span
                     key={`e${i}`}
-                    style={{ color: "#9abacc", fontSize: 11, padding: "0 2px" }}
+                    style={{ color: "#c3d8e6", fontSize: 11, padding: "0 2px" }}
                   >
                     …
                   </span>
@@ -1548,7 +1600,7 @@ export default function TransfersPage() {
                 style={{
                   textAlign: "center",
                   padding: "32px 0",
-                  color: "#8aaacc",
+                  color: "#b6cbe6",
                   fontFamily: "'Barlow',sans-serif",
                   fontSize: 12,
                   fontWeight: 600,
@@ -1597,7 +1649,7 @@ export default function TransfersPage() {
                   marginTop: 8,
                   borderRadius: 8,
                   background: "rgba(255,255,255,.03)",
-                  color: "#7a9aaa",
+                  color: "#aec8d6",
                   fontFamily: "'Barlow',sans-serif",
                   fontSize: 11,
                 }}
@@ -1607,7 +1659,7 @@ export default function TransfersPage() {
                     width: 12,
                     height: 12,
                     border: "2px solid #7a9aaa33",
-                    borderTopColor: "#7a9aaa",
+                    borderTopColor: "#aec8d6",
                     borderRadius: "50%",
                     animation: "spin .7s linear infinite",
                     flexShrink: 0,
@@ -1666,10 +1718,7 @@ export default function TransfersPage() {
                         marginTop: i > 0 ? 4 : 0,
                       }}
                     >
-                      {err
-                        .replace(/_/g, " ")
-                        .toLowerCase()
-                        .replace(/^./, (c) => c.toUpperCase())}
+                      {transferErrorText(err, playerName)}
                     </div>
                   ))}
                 </div>
@@ -1746,7 +1795,7 @@ export default function TransfersPage() {
                   >
                     <span
                       style={{
-                        color: "#7a9aaa",
+                        color: "#aec8d6",
                         fontSize: 11,
                         fontFamily: "'Barlow',sans-serif",
                       }}
@@ -1801,7 +1850,7 @@ export default function TransfersPage() {
                   background: canCommit
                     ? `linear-gradient(135deg,${ACCENT},${ACCENT2})`
                     : "rgba(255,255,255,.04)",
-                  color: canCommit ? "#0a0e1a" : "#7a9aaa",
+                  color: canCommit ? "#0a0e1a" : "#aec8d6",
                   fontFamily: "'Barlow Condensed',sans-serif",
                   fontWeight: 900,
                   fontSize: 13,
@@ -1864,7 +1913,7 @@ export default function TransfersPage() {
                       borderRadius: 8,
                       border: "1px solid rgba(255,255,255,.1)",
                       background: "transparent",
-                      color: "#9abacc",
+                      color: "#c3d8e6",
                       fontFamily: "'Barlow Condensed',sans-serif",
                       fontWeight: 800,
                       fontSize: 11,

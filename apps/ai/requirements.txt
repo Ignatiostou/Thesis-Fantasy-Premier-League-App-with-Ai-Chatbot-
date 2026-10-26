@@ -13,3 +13,4 @@ pyarrow==18.1.0
 xgboost>=2.1.4
 matplotlib==3.9.3
 seaborn==0.13.2
+pulp==3.3.2

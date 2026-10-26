@@ -147,3 +147,48 @@
     padding: 2px 5px !important;
   }
 }
+
+/* ── Squad list scroll affordance ──────────────────────────────────────────
+   The global scrollbar is a 3px, 8%-opacity sliver — invisible against the
+   panel, so the squad list looked like a truncated list rather than a
+   scrollable one. This gives that list (and only that list) a track and a
+   thumb you can actually see and grab. */
+.squad-scroll {
+  scrollbar-width: thin;                                  /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.28) rgba(255, 255, 255, 0.05);
+  scrollbar-gutter: stable;                               /* no reflow on hover */
+  padding-right: 4px;
+}
+
+.squad-scroll::-webkit-scrollbar {
+  width: 9px;
+}
+
+.squad-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 5px;
+}
+
+.squad-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.26);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.squad-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.45);
+  background-clip: content-box;
+}
+
+/* Fades the last row out at the bottom edge, so there is a second cue that the
+   list continues past the fold. Sticky with a negative margin means it hovers
+   over the content without taking up any height of its own. */
+.squad-scroll-fade {
+  position: sticky;
+  bottom: 0;
+  height: 26px;
+  margin-top: -26px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(5, 9, 18, 0) 0%, rgba(5, 9, 18, 0.92) 85%);
+}

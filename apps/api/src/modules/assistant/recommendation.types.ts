@@ -89,6 +89,12 @@ export interface PlayerComparisonPlayerData {
   form:                    number | null;
   chanceOfPlayingNextRound:number | null;
   status:                  string;
+  /** Season-to-date raw stats — not model output, straight from fpl_players. */
+  goalsScored:             number;
+  assists:                 number;
+  cleanSheets:             number;
+  bonus:                   number;
+  minutes:                 number;
   pros:                    string[];
   cons:                    string[];
 }

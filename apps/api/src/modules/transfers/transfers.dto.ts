@@ -3,7 +3,7 @@ export type TransferPair = {
   inPlayerId: number;
 };
 
-export type ActiveTransferChip = 'wildcard' | null;
+export type ActiveTransferChip = 'wildcard' | 'free_hit' | null;
 
 export type TransfersPreviewBody = {
   transfers: TransferPair[];

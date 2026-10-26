@@ -41,14 +41,22 @@ UPSERT_SQL = text("""
         id, "playerId", gameweek, minutes, "totalPoints", "goalsScored",
         assists, "cleanSheets", "goalsConceded", "ownGoals", "penaltiesSaved",
         "penaltiesMissed", "yellowCards", "redCards", saves, bonus, bps,
-        influence, creativity, threat, "ictIndex", "createdAt", "updatedAt"
+        influence, creativity, threat, "ictIndex",
+        "teamId", "opponentTeamId", "wasHome", "fixtureCount",
+        "createdAt", "updatedAt"
     ) VALUES (
         :id, :player_id, :gameweek, :minutes, :total_points, :goals_scored,
         :assists, :clean_sheets, :goals_conceded, :own_goals, :penalties_saved,
         :penalties_missed, :yellow_cards, :red_cards, :saves, :bonus, :bps,
-        :influence, :creativity, :threat, :ict_index, NOW(), NOW()
+        :influence, :creativity, :threat, :ict_index,
+        :team_id, :opponent_team_id, :was_home, :fixture_count,
+        NOW(), NOW()
     )
     ON CONFLICT ("playerId", gameweek) DO UPDATE SET
+        "teamId"          = COALESCE(EXCLUDED."teamId",         player_gameweek_stats."teamId"),
+        "opponentTeamId"  = COALESCE(EXCLUDED."opponentTeamId", player_gameweek_stats."opponentTeamId"),
+        "wasHome"         = COALESCE(EXCLUDED."wasHome",        player_gameweek_stats."wasHome"),
+        "fixtureCount"    = COALESCE(EXCLUDED."fixtureCount",   player_gameweek_stats."fixtureCount"),
         minutes           = EXCLUDED.minutes,
         "totalPoints"     = EXCLUDED."totalPoints",
         "goalsScored"     = EXCLUDED."goalsScored",
@@ -81,13 +89,23 @@ def known_gameweeks() -> set[int]:
     return set(df["id"].astype(int))
 
 
-def _stat_row(player_id: int, gameweek: int, stats: dict) -> dict:
-    """Normalises one aggregated stat blob into DB upsert params."""
+def _stat_row(player_id: int, gameweek: int, stats: dict, ctx: dict | None = None) -> dict:
+    """Normalises one aggregated stat blob into DB upsert params.
+
+    `ctx` carries the fixture context (team, opponent, venue). It is captured
+    here because it cannot be recovered later — see the note on the Prisma
+    model. Missing context is written as NULL rather than guessed.
+    """
+    ctx = ctx or {}
     row = {
         "id": f"bk{uuid.uuid4().hex}",
         "player_id": int(player_id),
         "gameweek": int(gameweek),
         "clean_sheets": bool(stats.get("clean_sheets", 0)),
+        "team_id": ctx.get("team_id"),
+        "opponent_team_id": ctx.get("opponent_team_id"),
+        "was_home": ctx.get("was_home"),
+        "fixture_count": ctx.get("fixture_count"),
     }
     for f in _INT_STATS:
         row[f] = int(stats.get(f) or 0)
@@ -98,12 +116,30 @@ def _stat_row(player_id: int, gameweek: int, stats: dict) -> dict:
     return row
 
 
-def rows_from_history(player_id: int, history: list[dict]) -> list[dict]:
+def _fixture_team_map() -> dict[int, tuple[int, int]]:
+    """fixture id → (home team id, away team id), read while it is still current."""
+    df = read_sql('SELECT id, "teamHId", "teamAId" FROM fpl_fixtures')
+    return {int(r.id): (int(r.teamHId), int(r.teamAId)) for r in df.itertuples()}
+
+
+def _player_team_map() -> dict[int, int]:
+    """player id → club id, as of now (correct during the season it describes)."""
+    df = read_sql('SELECT id, "teamId" FROM fpl_players')
+    return {int(r.id): int(r.teamId) for r in df.itertuples()}
+
+
+def rows_from_history(player_id: int, history: list[dict],
+                      team_id: int | None = None) -> list[dict]:
     """
     element-summary 'history' entries → one row per gameweek.
     Double gameweeks (two fixtures in one round) are summed.
+
+    Each history entry carries `opponent_team` and `was_home`; those are kept
+    for the FIRST fixture of the round, with fixture_count recording how many
+    there were, since summed stats cannot describe two opponents at once.
     """
     by_round: dict[int, dict] = {}
+    ctx_by_round: dict[int, dict] = {}
     for h in history:
         gw = int(h["round"])
         agg = by_round.setdefault(gw, {f: 0 for f in _INT_STATS + _FLOAT_STATS} | {"clean_sheets": 0})
@@ -113,15 +149,44 @@ def rows_from_history(player_id: int, history: list[dict]) -> list[dict]:
             agg[f] = float(agg[f]) + float(h.get(f) or 0)
         agg["clean_sheets"] += int(h.get("clean_sheets") or 0)
 
-    return [_stat_row(player_id, gw, stats) for gw, stats in sorted(by_round.items())]
+        ctx = ctx_by_round.setdefault(gw, {
+            "team_id": team_id,
+            "opponent_team_id": int(h["opponent_team"]) if h.get("opponent_team") else None,
+            "was_home": bool(h["was_home"]) if h.get("was_home") is not None else None,
+            "fixture_count": 0,
+        })
+        ctx["fixture_count"] += 1
+
+    return [_stat_row(player_id, gw, stats, ctx_by_round.get(gw))
+            for gw, stats in sorted(by_round.items())]
 
 
 def rows_from_event_live(gameweek: int, elements: list[dict]) -> list[dict]:
-    """event/{gw}/live 'elements' → one row per player (already GW-aggregated)."""
+    """event/{gw}/live 'elements' → one row per player (already GW-aggregated).
+
+    The live payload has no opponent field, but each element's `explain` block
+    names the fixture(s) it played in, which resolves to the opponent through
+    fpl_fixtures while that table still describes the current season.
+    """
+    fixtures = _fixture_team_map()
+    teams = _player_team_map()
+
     rows = []
     for el in elements:
+        pid = int(el["id"])
         stats = el.get("stats") or {}
-        rows.append(_stat_row(el["id"], gameweek, stats))
+        explains = el.get("explain") or []
+        fixture_ids = [int(e["fixture"]) for e in explains if e.get("fixture")]
+
+        ctx = {"team_id": teams.get(pid), "fixture_count": len(fixture_ids) or None,
+               "opponent_team_id": None, "was_home": None}
+        if fixture_ids and ctx["team_id"] and fixture_ids[0] in fixtures:
+            home, away = fixtures[fixture_ids[0]]
+            if ctx["team_id"] in (home, away):
+                ctx["was_home"] = ctx["team_id"] == home
+                ctx["opponent_team_id"] = away if ctx["was_home"] else home
+
+        rows.append(_stat_row(pid, gameweek, stats, ctx))
     return rows
 
 

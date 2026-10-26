@@ -11,7 +11,12 @@ export interface PlayerProjection {
   nowCost:          number;         // tenths
 
   // Core projection values
-  xPtsNextGw:       number;         // expected points next GW (rounded to 1dp)
+  xPtsNextGw:       number;         // EXPECTED points next GW — includes the
+                                    // chance he does not appear at all
+  xPtsIfStarts?:    number;         // points if he does appear; equals
+                                    // xPtsNextGw / chanceOfPlaying. Undefined
+                                    // for predictions written before the
+                                    // conditional model split.
   xPtsNext3Gw:      number;         // cumulative over next 3 GWs
   xPtsNext5Gw:      number;         // cumulative over next 5 GWs
 

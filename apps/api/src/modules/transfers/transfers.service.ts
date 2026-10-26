@@ -31,7 +31,16 @@ function getSellPriceFplProfitHalf(buyPrice: number, nowCost: number) {
 function normalizeTransferChip(value: string | null | undefined): ActiveTransferChip {
   if (!value) return null;
   if (value === 'wildcard' || value === 'WILDCARD') return 'wildcard';
+  if (value === 'free_hit' || value === 'FREE_HIT') return 'free_hit';
   return null;
+}
+
+/**
+ * Both chips lift the transfer limit for one gameweek — the difference is what
+ * happens afterwards, which is handled at pick propagation, not here.
+ */
+function grantsUnlimitedTransfers(chip: ActiveTransferChip): boolean {
+  return chip === 'wildcard' || chip === 'free_hit';
 }
 
 async function ensureCurrentGwState(userTeamId: string, gameweek: number) {
@@ -329,16 +338,32 @@ export async function previewTransfers(
     };
   });
 
+  // A squad can drift out of shape without the manager touching it: a player
+  // who moves club (or is reclassified) mid-season changes the counts under a
+  // squad that was legal when it was picked. Validating the resulting squad in
+  // absolute terms then rejects *every* transfer, including the ones that would
+  // repair the breach — the manager is locked out with no way forward. FPL
+  // grandfathers those squads instead, so only a transfer that makes a count
+  // worse is blocked; one that leaves an inherited breach alone, or improves
+  // it, goes through.
+  const currentPosCounts = countByNumber(currentPicks.map((p) => p.player.position));
   const posCounts = countByNumber(nextPicks.map((p) => p.position));
   for (const pos of Object.keys(POSITION_LIMITS).map(Number)) {
-    if ((posCounts[pos] ?? 0) !== POSITION_LIMITS[pos]) {
+    const limit = POSITION_LIMITS[pos];
+    const after = posCounts[pos] ?? 0;
+    const before = currentPosCounts[pos] ?? 0;
+
+    if (after !== limit && Math.abs(after - limit) >= Math.abs(before - limit)) {
       errors.push(`INVALID_POSITION_COUNT:${pos}`);
     }
   }
 
+  const currentClubCounts = countByNumber(currentPicks.map((p) => p.player.teamId));
   const clubCounts = countByNumber(nextPicks.map((p) => p.teamId));
   for (const [clubIdRaw, count] of Object.entries(clubCounts)) {
-    if (count > MAX_PER_CLUB) {
+    const before = currentClubCounts[Number(clubIdRaw)] ?? 0;
+
+    if (count > MAX_PER_CLUB && count > before) {
       errors.push(`MAX_3_PER_CLUB:${clubIdRaw}`);
     }
   }
@@ -380,24 +405,31 @@ export async function previewTransfers(
     errors.push('WILDCARD_NOT_AVAILABLE');
   }
 
+  // A chip already played from the chips panel counts too — only a wildcard
+  // requested inline through this endpoint used to register, so a Free Hit (or
+  // a wildcard played the other way) was silently charged full point hits.
+  const chipInEffect =
+    normalizeTransferChip(ctx.gwState.activeChip) ?? activeChip;
+  const unlimited = grantsUnlimitedTransfers(chipInEffect);
+
   const freeTransfersRemainingBefore = Math.max(
     0,
     ctx.gwState.freeTransfers - ctx.gwState.transfersMade,
   );
 
-  const hitTransfersCount = wildcardRequested
+  const hitTransfersCount = unlimited
     ? 0
     : Math.max(0, transfers.length - freeTransfersRemainingBefore);
 
   const hitCostAdded = hitTransfersCount * HIT_COST_PER_EXTRA_TRANSFER;
   const hitCostTotalAfter = ctx.gwState.pointsHit + hitCostAdded;
 
-  const freeTransfersRemainingAfter = wildcardRequested
+  const freeTransfersRemainingAfter = unlimited
     ? freeTransfersRemainingBefore
     : Math.max(0, freeTransfersRemainingBefore - transfers.length);
 
   cart.forEach((item, index) => {
-    item.isHit = wildcardRequested ? false : index >= freeTransfersRemainingBefore;
+    item.isHit = unlimited ? false : index >= freeTransfersRemainingBefore;
   });
 
   if (errors.length > 0) {
@@ -447,7 +479,11 @@ export async function commitTransfers(
     0,
     ctx.gwState.freeTransfers - ctx.gwState.transfersMade,
   );
-  const wildcardRequested = activeChip === 'wildcard';
+  // Only a wildcard *requested through this endpoint* is played here. A chip
+  // already active on the gameweek state was recorded by /chips/play and must
+  // not be written a second time.
+  const alreadyActive = normalizeTransferChip(ctx.gwState.activeChip);
+  const wildcardRequested = activeChip === 'wildcard' && !alreadyActive;
   const summary = preview.summary;
 
   await prisma.$transaction(async (tx) => {

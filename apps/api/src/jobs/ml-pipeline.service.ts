@@ -85,3 +85,15 @@ export function runMlPipeline(completedGameweek: number): Promise<void> {
 export function runMlBackfill(): Promise<void> {
   return runPython(['scripts/backfill_season.py'], 'historical backfill');
 }
+
+/**
+ * Predict an explicit gameweek with the current model — no retrain.
+ * For the season boundary: GW1 has no prior finished gameweek to resolve
+ * "next GW" from, so the normal completed-gameweek flow never reaches it.
+ */
+export function runMlPredictOnly(targetGameweek: number): Promise<void> {
+  return runPython(
+    ['pipeline.py', '--predict-only', '--target-gameweek', String(targetGameweek)],
+    `predict-only (GW${targetGameweek})`,
+  );
+}

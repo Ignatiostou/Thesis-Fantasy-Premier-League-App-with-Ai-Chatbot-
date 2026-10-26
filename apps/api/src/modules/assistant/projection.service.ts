@@ -143,7 +143,15 @@ export async function projectPlayer(
       club:              player.team.shortName,
       position:          POSITION_LABEL[player.position] ?? 'UNK',
       nowCost:           player.nowCost,
+      // xPtsNextGw is the EXPECTED score: appearance risk already priced in,
+      // so a 50%-to-start player is halved. xPtsIfStarts is what he returns
+      // when he actually plays — the number people mean by "projected points".
+      // Quote both; the expected value alone reads as absurdly low for anyone
+      // carrying rotation risk.
       xPtsNextGw:        round1(mlPred.predictedPtsGw1),
+      xPtsIfStarts:      mlPred.predictedPtsIfStarts != null
+                           ? round1(mlPred.predictedPtsIfStarts)
+                           : undefined,
       xPtsNext3Gw:       round1(mlPred.predictedPtsGw3),
       xPtsNext5Gw:       round1(mlPred.predictedPtsGw5),
       availabilityScore: mlAvailScore,

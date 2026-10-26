@@ -151,6 +151,9 @@ export default function SquadBuilderPage() {
   const [posFilter, setPosFilter] = useState(0);
   const [teamFilter, setTeamFilter] = useState(0);
   const [search, setSearch] = useState("");
+  // Typed value drives the input; the settled value drives the request, so a
+  // fast typist fires one query instead of one per keystroke.
+  const [querySearch, setQuerySearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
@@ -174,21 +177,33 @@ export default function SquadBuilderPage() {
       });
       if (posFilter) params.set("position", String(posFilter));
       if (teamFilter) params.set("teamId", String(teamFilter));
-      if (search.trim()) params.set("q", search.trim());
+      if (querySearch.trim()) params.set("q", querySearch.trim());
       const res = await apiFetch<PaginatedPlayers>(`/fpl/players?${params}`);
       setMarket(res.items);
       setTotal(res.total);
     } finally {
       setLoading(false);
     }
-  }, [page, posFilter, teamFilter, search]);
+  }, [page, posFilter, teamFilter, querySearch]);
+
+  // Settle the typed term, and reset to page 1 in the same step. Resetting in a
+  // separate effect fired a request for the OLD page first, which briefly showed
+  // an empty list whenever a narrower search had fewer pages than the current one.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setQuerySearch(search);
+      setPage(1);
+    }, 180);
+    return () => clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     loadMarket();
   }, [loadMarket]);
+
   useEffect(() => {
     setPage(1);
-  }, [posFilter, teamFilter, search]);
+  }, [posFilter, teamFilter]);
 
   // ── Squad logic ───────────────────────────────────────────────────────────
   const togglePlayer = (player: FplPlayer) => {
@@ -275,6 +290,20 @@ export default function SquadBuilderPage() {
         @keyframes shimmer{ 0%{background-position:200% 0} 100%{background-position:-200% 0} }
         .sk { background:linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.06) 50%,rgba(255,255,255,.03) 75%); background-size:200% 100%; animation:shimmer 1.4s infinite; border-radius:8px; }
         ::-webkit-scrollbar { width:3px } ::-webkit-scrollbar-thumb { background:rgba(255,255,255,.08);border-radius:2px }
+
+        /* The global scrollbar above is a 3px, 8%-opacity sliver — invisible on
+           this panel, so a list of 500+ players looked like it simply ended.
+           The player list gets a track and thumb you can actually see and grab. */
+        .sb-list { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.28) rgba(255,255,255,.05); scrollbar-gutter: stable; }
+        .sb-list::-webkit-scrollbar { width: 9px }
+        .sb-list::-webkit-scrollbar-track { background: rgba(255,255,255,.05); border-radius: 5px }
+        .sb-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.26); border-radius: 5px; border: 2px solid transparent; background-clip: content-box }
+        .sb-list::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.45); background-clip: content-box }
+
+        /* Second cue: the last row fades out at the bottom edge. Sticky with a
+           matching negative margin, so it hovers without taking up height. */
+        .sb-list-fade { position: sticky; bottom: 0; height: 26px; margin-top: -26px; pointer-events: none;
+          background: linear-gradient(180deg, rgba(10,14,26,0) 0%, rgba(10,14,26,.94) 85%); }
 
         /* ── Responsive: stack pitch above player list below 900px ── */
         @media (max-width: 900px) {
@@ -643,24 +672,45 @@ export default function SquadBuilderPage() {
                 </button>
               ))}
             </div>
+            {/* The club filter is a native <select>: the closed control can be
+                styled, but the popup list is drawn by the OS and ignored the
+                dark theme, rendering as a white sheet with a blue highlight.
+                Colouring the <option>s directly is what browsers actually
+                honour, so the open list matches the rest of the panel. */}
             <select
               value={teamFilter}
               onChange={(e) => setTeamFilter(Number(e.target.value))}
               style={{
-                background: "rgba(255,255,255,.04)",
-                border: "1px solid rgba(255,255,255,.08)",
+                background: "rgba(255,255,255,.05)",
+                border: "1px solid rgba(255,255,255,.12)",
                 borderRadius: 7,
-                color: "rgba(255,255,255,.8)",
-                padding: "6px 8px",
+                color: "#e8f1f7",
+                padding: "9px 30px 9px 11px",
                 fontFamily: "'Barlow',sans-serif",
-                fontSize: 11,
+                fontSize: 12.5,
+                fontWeight: 500,
                 outline: "none",
                 cursor: "pointer",
+                width: "100%",
+                appearance: "none",
+                WebkitAppearance: "none",
+                MozAppearance: "none",
+                colorScheme: "dark",
+                backgroundImage:
+                  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4.5L6 8.5L10 4.5' stroke='%238ea9bd' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>\")",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 10px center",
               }}
             >
-              <option value={0}>All clubs</option>
+              <option value={0} style={{ background: "#0f1724", color: "#e8f1f7" }}>
+                All clubs
+              </option>
               {fplTeams.map((t) => (
-                <option key={t.id} value={t.id}>
+                <option
+                  key={t.id}
+                  value={t.id}
+                  style={{ background: "#0f1724", color: "#e8f1f7" }}
+                >
                   {t.name}
                 </option>
               ))}
@@ -699,43 +749,52 @@ export default function SquadBuilderPage() {
                     </div>
                   );
                 })}
+            <div className="sb-list-fade" aria-hidden />
           </div>
 
           {/* Pagination */}
           {totalPages > 1 && (
             <div
               style={{
-                padding: "8px",
+                padding: "12px 8px 12px 14px",
                 borderTop: "1px solid rgba(255,255,255,.06)",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
+                justifyContent: "flex-start",
+                gap: 12,
                 flexShrink: 0,
               }}
             >
               <button
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
+                aria-label="Previous page"
                 style={{
-                  padding: "4px 10px",
-                  borderRadius: 6,
-                  border: "1px solid rgba(255,255,255,.1)",
-                  background: "transparent",
-                  color: "rgba(255,255,255,.5)",
+                  width: 38,
+                  height: 38,
+                  borderRadius: 9,
+                  border: `1px solid ${page > 1 ? "rgba(255,255,255,.22)" : "rgba(255,255,255,.08)"}`,
+                  background: page > 1 ? "rgba(255,255,255,.06)" : "transparent",
+                  color: page > 1 ? "#e8f1f7" : "rgba(255,255,255,.22)",
                   cursor: page > 1 ? "pointer" : "not-allowed",
                   fontFamily: "'Barlow Condensed',sans-serif",
-                  fontSize: 12,
+                  fontSize: 22,
                   fontWeight: 700,
+                  lineHeight: 1,
+                  transition: "all .12s",
                 }}
               >
                 ‹
               </button>
               <span
                 style={{
-                  color: "rgba(255,255,255,.35)",
-                  fontSize: 10,
-                  fontFamily: "'Barlow',sans-serif",
+                  color: "#e8f1f7",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  fontFamily: "'Barlow Condensed',sans-serif",
+                  letterSpacing: ".06em",
+                  minWidth: 62,
+                  textAlign: "center",
                 }}
               >
                 {page} / {totalPages}
@@ -743,16 +802,20 @@ export default function SquadBuilderPage() {
               <button
                 onClick={() => setPage(Math.min(totalPages, page + 1))}
                 disabled={page === totalPages}
+                aria-label="Next page"
                 style={{
-                  padding: "4px 10px",
-                  borderRadius: 6,
-                  border: "1px solid rgba(255,255,255,.1)",
-                  background: "transparent",
-                  color: "rgba(255,255,255,.5)",
+                  width: 38,
+                  height: 38,
+                  borderRadius: 9,
+                  border: `1px solid ${page < totalPages ? "rgba(255,255,255,.22)" : "rgba(255,255,255,.08)"}`,
+                  background: page < totalPages ? "rgba(255,255,255,.06)" : "transparent",
+                  color: page < totalPages ? "#e8f1f7" : "rgba(255,255,255,.22)",
                   cursor: page < totalPages ? "pointer" : "not-allowed",
                   fontFamily: "'Barlow Condensed',sans-serif",
-                  fontSize: 12,
+                  fontSize: 22,
                   fontWeight: 700,
+                  lineHeight: 1,
+                  transition: "all .12s",
                 }}
               >
                 ›

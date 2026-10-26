@@ -233,6 +233,8 @@ export async function chatStream(req: AuthRequest, res: Response) {
           primarySource: event.primarySource,
           reason: event.reason,
         })}\n\n`);
+      } else if (event.kind === 'status') {
+        res.write(`data: ${JSON.stringify({ type: 'status', message: event.message })}\n\n`);
       } else {
         res.write(`data: ${JSON.stringify({ type: 'delta', content: event.text })}\n\n`);
       }

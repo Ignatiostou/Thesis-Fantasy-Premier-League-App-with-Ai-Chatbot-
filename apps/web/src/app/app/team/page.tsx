@@ -17,6 +17,8 @@ import PlayerSlot, {
 } from "@/features/team/PlayerSlot";
 import ContextMenu from "@/features/team/ContextMenu";
 import ChipCard from "@/features/team/ChipCard";
+import FormationSelect from "@/features/team/FormationSelect";
+import { applyFormation, currentFormation } from "@/features/team/formations";
 
 const CHIP_DEFS = [
   {
@@ -299,6 +301,8 @@ export default function MyTeamPage() {
       const pos = Number(p.position);
       rows[pos]?.push(p);
     });
+  const formation = currentFormation(picks);
+
   const gwPts = picks.reduce((s, p) => {
     const ep = p.eventPoints ?? 0;
     if (p.isOnBench && chip !== "BENCH_BOOST") return s;
@@ -653,6 +657,16 @@ export default function MyTeamPage() {
             }}
           >
             <PitchSvg />
+            <FormationSelect
+              current={formation}
+              onSelect={(f) => {
+                const next = applyFormation(picks, f);
+                if (legalFormation(next)) {
+                  setPicks(next);
+                  setDirty(true);
+                }
+              }}
+            />
             {([4, 3, 2, 1] as const).map((posId) => (
               <div
                 key={posId}
@@ -759,8 +773,8 @@ export default function MyTeamPage() {
           <div style={{ marginBottom: 14 }}>
             <div
               style={{
-                color: "rgba(255,255,255,.35)",
-                fontSize: 8,
+                color: "rgba(255,255,255,.62)",
+                fontSize: 10,
                 fontWeight: 700,
                 letterSpacing: ".25em",
                 textTransform: "uppercase",
@@ -846,11 +860,11 @@ export default function MyTeamPage() {
           />
 
           {/* Squad list */}
-          <div style={{ flex: 1, overflow: "hidden auto" }}>
+          <div className="squad-scroll" style={{ flex: 1, overflow: "hidden auto" }}>
             <div
               style={{
-                color: "rgba(255,255,255,.35)",
-                fontSize: 8,
+                color: "rgba(255,255,255,.62)",
+                fontSize: 10,
                 fontWeight: 700,
                 letterSpacing: ".25em",
                 textTransform: "uppercase",
@@ -869,10 +883,10 @@ export default function MyTeamPage() {
                   key={p.id}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "16px 1fr 24px 20px 20px",
+                    gridTemplateColumns: "19px 1fr 28px 23px 23px",
                     alignItems: "center",
-                    gap: 5,
-                    padding: "5px 7px",
+                    gap: 7,
+                    padding: "8px 9px",
                     borderRadius: 7,
                     marginBottom: 3,
                     background: onBench
@@ -887,15 +901,15 @@ export default function MyTeamPage() {
                 >
                   <div
                     style={{
-                      width: 16,
-                      height: 16,
+                      width: 19,
+                      height: 19,
                       borderRadius: 4,
                       background: `${c}20`,
                       border: `1px solid ${c}40`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: 6,
+                      fontSize: 7.5,
                       fontWeight: 900,
                       color: c,
                     }}
@@ -905,8 +919,8 @@ export default function MyTeamPage() {
                   <div style={{ minWidth: 0 }}>
                     <div
                       style={{
-                        color: "white",
-                        fontSize: 11,
+                        color: "#ffffff",
+                        fontSize: 13,
                         fontWeight: 700,
                         whiteSpace: "nowrap",
                         overflow: "hidden",
@@ -917,8 +931,8 @@ export default function MyTeamPage() {
                     </div>
                     <div
                       style={{
-                        color: "rgba(255,255,255,.45)",
-                        fontSize: 8,
+                        color: "rgba(255,255,255,.62)",
+                        fontSize: 10,
                         fontFamily: "'Barlow',sans-serif",
                       }}
                     >
@@ -927,8 +941,8 @@ export default function MyTeamPage() {
                   </div>
                   <div
                     style={{
-                      color: ep > 0 ? ACCENT : "#2a3a4a",
-                      fontSize: 11,
+                      color: ep > 0 ? ACCENT : "rgba(255,255,255,.4)",
+                      fontSize: 13,
                       fontWeight: 700,
                       textAlign: "right",
                     }}
@@ -980,8 +994,8 @@ export default function MyTeamPage() {
                             ? color + "22"
                             : "rgba(255,255,255,.04)",
                           border: `1.5px solid ${active ? color : "rgba(255,255,255,.1)"}`,
-                          color: active ? color : "#2a3a4a",
-                          fontSize: 7,
+                          color: active ? color : "rgba(255,255,255,.45)",
+                          fontSize: 9,
                           fontWeight: 900,
                           cursor: onBench ? "not-allowed" : "pointer",
                           display: "flex",
@@ -998,6 +1012,7 @@ export default function MyTeamPage() {
                 </div>
               );
             })}
+            <div className="squad-scroll-fade" aria-hidden />
           </div>
 
           <div
@@ -1029,13 +1044,13 @@ export default function MyTeamPage() {
                 key={i}
                 style={{ display: "flex", gap: 7, alignItems: "flex-start" }}
               >
-                <span style={{ fontSize: 11, flexShrink: 0, marginTop: 1 }}>
+                <span style={{ fontSize: 13, flexShrink: 0, marginTop: 1 }}>
                   {t.icon}
                 </span>
                 <span
                   style={{
-                    color: "rgba(255,255,255,.45)",
-                    fontSize: 9,
+                    color: "rgba(255,255,255,.66)",
+                    fontSize: 11,
                     fontFamily: "'Barlow',sans-serif",
                     lineHeight: 1.55,
                   }}

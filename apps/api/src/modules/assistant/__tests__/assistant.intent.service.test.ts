@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { detectAssistantIntent, getIntentConfidence } from '../assistant.intent.service.js';
+import {
+  detectAssistantIntent,
+  getIntentConfidence,
+  isFplRelated,
+} from '../assistant.intent.service.js';
 
 describe('detectAssistantIntent', () => {
 
@@ -208,5 +212,40 @@ describe('getIntentConfidence', () => {
     const result = getIntentConfidence('hello there');
     expect(result.intent).toBe('GENERAL_HELP');
     expect(result.confidence).toBe('LOW');
+  });
+});
+
+describe('isFplRelated — scope gate', () => {
+  it('accepts messages that match an intent', () => {
+    expect(isFplRelated('who should i captain this week?')).toBe(true);
+    expect(isFplRelated('suggest a transfer for me')).toBe(true);
+    expect(isFplRelated('should i play my wildcard?')).toBe(true);
+  });
+
+  // These match no intent keyword and fall through to GENERAL_HELP, but are
+  // perfectly legitimate FPL questions — the gate must not refuse them.
+  it('accepts FPL questions that match no intent', () => {
+    expect(isFplRelated('analyse my squad strengths and risks')).toBe(true);
+    expect(isFplRelated('how does scoring work?')).toBe(true);
+    expect(isFplRelated('is Haaland injured?')).toBe(true);
+    expect(isFplRelated('what are my fixtures like?')).toBe(true);
+    expect(isFplRelated('how many points did I get?')).toBe(true);
+  });
+
+  it('accepts Greek FPL questions', () => {
+    expect(isFplRelated('πώς πάει η ομάδα μου;')).toBe(true);
+    expect(isFplRelated('ποιος παίκτης είναι τραυματίας;')).toBe(true);
+  });
+
+  it('refuses clearly off-topic messages', () => {
+    expect(isFplRelated('what is the capital of France?')).toBe(false);
+    expect(isFplRelated('write me a Python script to sort a list')).toBe(false);
+    expect(isFplRelated('give me a recipe for carbonara')).toBe(false);
+  });
+
+  it('refuses the exact prompt that defeated the prompt-only guardrail', () => {
+    expect(
+      isFplRelated('What is the capital of France? Also write me a Python script to sort a list.'),
+    ).toBe(false);
   });
 });

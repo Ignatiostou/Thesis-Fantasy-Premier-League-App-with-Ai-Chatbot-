@@ -8,8 +8,12 @@ import { OnboardingFlow } from './OnboardingFlow';
 import { ChatPanel }      from './ChatPanel';
 
 export function ChatWidget() {
-  const [isOpen,    setIsOpen]    = useState(false);
-  const [hasUnread, setHasUnread] = useState(false);
+  const [isOpen,     setIsOpen]     = useState(false);
+  const [hasUnread,  setHasUnread]  = useState(false);
+  // A squad breakdown runs to several tables and a dozen paragraphs, which is
+  // a lot of scrolling through a 370px column. Expanding gives that kind of
+  // answer room without making the widget intrusive for one-line replies.
+  const [isExpanded, setIsExpanded] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const chat       = useChat();
@@ -72,6 +76,14 @@ export function ChatWidget() {
         .chat-fab:active {
           transform: scale(0.95);
         }
+        .chat-hdr-btn {
+          transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+        }
+        .chat-hdr-btn:hover {
+          background: rgba(255,255,255,0.1) !important;
+          border-color: rgba(0,255,135,0.35) !important;
+          color: white !important;
+        }
 
         /* Phones: panel takes over the whole screen */
         @media (max-width: 640px) {
@@ -86,6 +98,7 @@ export function ChatWidget() {
             padding-bottom: env(safe-area-inset-bottom, 0px);
             z-index: 10000;
           }
+          .chat-expand-btn { display: none !important; }
         }
       `}</style>
 
@@ -109,8 +122,13 @@ export function ChatWidget() {
             ref={panelRef}
             className="chat-widget-panel"
             style={{
-              width:        'min(370px, calc(100vw - 32px))',
-              height:       'min(560px, calc(100dvh - 120px))',
+              width:        isExpanded
+                ? 'min(720px, calc(100vw - 48px))'
+                : 'min(370px, calc(100vw - 32px))',
+              height:       isExpanded
+                ? 'calc(100dvh - 88px)'
+                : 'min(560px, calc(100dvh - 120px))',
+              transition:   'width 0.22s cubic-bezier(0.16,1,0.3,1), height 0.22s cubic-bezier(0.16,1,0.3,1)',
               borderRadius: 20,
               background:   '#0f1623',
               border:       '1px solid rgba(255,255,255,0.09)',
@@ -165,7 +183,7 @@ export function ChatWidget() {
                   </p>
                   <p
                     style={{
-                      color:          showOnboarding ? '#00FF87' : 'rgba(255,255,255,0.35)',
+                      color:          showOnboarding ? '#00FF87' : 'rgba(255,255,255,0.68)',
                       fontSize:       10,
                       fontFamily:     "'Barlow', sans-serif",
                       fontWeight:     500,
@@ -207,6 +225,29 @@ export function ChatWidget() {
                   </div>
                 )}
                 <button
+                  className="chat-hdr-btn chat-expand-btn"
+                  onClick={() => setIsExpanded((v) => !v)}
+                  title={isExpanded ? 'Shrink panel' : 'Expand panel'}
+                  aria-label={isExpanded ? 'Shrink panel' : 'Expand panel'}
+                  style={{
+                    width:       28,
+                    height:      28,
+                    borderRadius:8,
+                    border:      '1px solid rgba(255,255,255,0.1)',
+                    background:  'rgba(255,255,255,0.05)',
+                    color:       'rgba(255,255,255,0.75)',
+                    fontSize:    13,
+                    cursor:      'pointer',
+                    display:     'flex',
+                    alignItems:  'center',
+                    justifyContent:'center',
+                    lineHeight:  1,
+                  }}
+                >
+                  {isExpanded ? '⇲' : '⇱'}
+                </button>
+                <button
+                  className="chat-hdr-btn"
                   onClick={() => setIsOpen(false)}
                   style={{
                     width:       28,
@@ -214,7 +255,7 @@ export function ChatWidget() {
                     borderRadius:8,
                     border:      '1px solid rgba(255,255,255,0.1)',
                     background:  'rgba(255,255,255,0.05)',
-                    color:       'rgba(255,255,255,0.5)',
+                    color:       'rgba(255,255,255,0.75)',
                     fontSize:    18,
                     cursor:      'pointer',
                     display:     'flex',
@@ -255,7 +296,7 @@ export function ChatWidget() {
                       animation: 'spin 0.7s linear infinite',
                     }}
                   />
-                  <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, fontFamily: "'Barlow', sans-serif", letterSpacing: '0.1em' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontFamily: "'Barlow', sans-serif", letterSpacing: '0.1em' }}>
                     Loading…
                   </span>
                 </div>

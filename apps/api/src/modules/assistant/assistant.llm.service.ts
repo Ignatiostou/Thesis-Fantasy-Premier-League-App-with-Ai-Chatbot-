@@ -88,12 +88,12 @@ export async function generateReply(params: GenerateReplyParams): Promise<string
 async function generateReplyWithAnthropic(params: GenerateReplyParams): Promise<string> {
   const anthropic = getAnthropicClient();
   const model = getAnthropicModel();
-  const temperature = resolveTemperature(params.intent);
 
+  // Claude 5 models (opus-5/sonnet-5/fable-5) reject `temperature` outright —
+  // the API 400s with "temperature is deprecated for this model".
   const response = await anthropic.messages.create({
     model,
     max_tokens: DEFAULT_MAX_TOKENS,
-    temperature,
     system: params.systemPrompt,
     messages: params.messages,
   });
@@ -159,12 +159,10 @@ async function* generateReplyStreamWithAnthropic(
 ): AsyncGenerator<string> {
   const anthropic = getAnthropicClient();
   const model = getAnthropicModel();
-  const temperature = resolveTemperature(params.intent);
 
   const stream = await anthropic.messages.stream({
     model,
     max_tokens: DEFAULT_MAX_TOKENS,
-    temperature,
     system: params.systemPrompt,
     messages: params.messages,
   });

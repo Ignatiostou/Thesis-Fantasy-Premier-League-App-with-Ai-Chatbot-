@@ -27,6 +27,7 @@ export interface FplFixture {
   teamAScore: number | null;
   started: boolean | null;
   finished: boolean | null;
+  finishedProvisional: boolean | null;
 }
 
 export interface TeamPlayer {

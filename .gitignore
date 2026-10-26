@@ -25,13 +25,23 @@ pnpm-debug.log*
 # misc
 coverage/
 
-# sync-conflict copies (contain secrets / duplicates)
-*-LAPTOP-3OCSMQUT*
-
-# accidentally duplicated ML output path
-apps/ai/apps/
-
-# ML artifacts anywhere
-**/artifacts/models/
-**/artifacts/datasets/
-**/artifacts/reports/
+# Publish source, not local research outputs or sync conflicts
+.claude/
+/Thesis/
+/improvements/
+/output/
+/thesis_build/
+/tmp/
+/*.pdf
+/*.docx
+/*.zip
+/*.drawio
+/system-architecture.svg
+*-LAPTOP-*
+*.bak
+**/__pycache__/
+**/.pytest_cache/
+**/.venv/
+**/artifacts/
+/apps/ai/apps/
+!**/.env.example

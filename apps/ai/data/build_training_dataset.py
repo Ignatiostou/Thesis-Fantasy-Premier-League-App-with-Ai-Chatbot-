@@ -9,6 +9,7 @@ from constants import (
     FEATURE_COLS,
     TARGET_POINTS, TARGET_MINUTES, TARGET_PLAYED,
     MIN_MINUTES_PLAYED,
+    season_round_key,
 )
 from features.player_features import build_features
 from logging_utils import get_logger
@@ -28,8 +29,14 @@ def attach_targets(df: pd.DataFrame) -> pd.DataFrame:
     Uses "gw_points" (raw per-GW score preserved by _preserve_raw_gw_points)
     as the source for TARGET_POINTS — NOT "total_points" which is cumulative
     after feature engineering runs.
+
+    Sorted by season_round_key (not raw "gameweek") so that shift(-1) picks up
+    the correct next row across a season boundary — "gameweek" alone resets to
+    1 each season, which would otherwise interleave two seasons' GW1s etc.
     """
-    df = df.sort_values(["player_id", "gameweek"]).copy()
+    df = df.copy()
+    df["_round_key"] = season_round_key(df)
+    df = df.sort_values(["player_id", "_round_key"]).drop(columns=["_round_key"])
 
     # KEY FIX: shift "gw_points" (raw per-GW) not "total_points" (cumulative)
     df[TARGET_POINTS] = (
@@ -84,19 +91,36 @@ def temporal_split(
     df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Splits by gameweek — last VALIDATION_GW_COUNT GWs go to validation.
-    This is CRITICAL for time-series data: never use random splits for FPL data
-    as it would leak future information into training.
+    Splits chronologically — the last VALIDATION_GW_COUNT rounds go to
+    validation. This is CRITICAL for time-series data: never use random splits
+    for FPL data as it would leak future information into training.
+
+    Uses season_round_key rather than raw "gameweek": across a combined
+    multi-season dataset, "gameweek" resets to 1 every season, so picking the
+    cutoff by raw gameweek number would mix rounds from different seasons
+    (e.g. every season's GW34-38 at once) instead of taking the true most
+    recent rounds.
     """
-    max_gw    = df["gameweek"].max()
-    val_start = max_gw - VALIDATION_GW_COUNT + 1
+    df = df.copy()
+    df["_round_key"] = season_round_key(df)
 
-    train_df = df[df["gameweek"] < val_start].copy()
-    val_df   = df[df["gameweek"] >= val_start].copy()
+    distinct_rounds = sorted(df["_round_key"].unique())
+    n_val_rounds    = min(VALIDATION_GW_COUNT, max(len(distinct_rounds) - 1, 1))
+    val_start_key   = distinct_rounds[-n_val_rounds]
 
+    train_df = df[df["_round_key"] < val_start_key].drop(columns=["_round_key"]).copy()
+    val_df   = df[df["_round_key"] >= val_start_key].drop(columns=["_round_key"]).copy()
+
+    def _fmt(key: int) -> str:
+        # key >= 100 means it's a season_round_key ("YYYY" * 100 + GW); a bare
+        # gameweek number (single-season / no "season" column) is always < 100.
+        return f"{key // 100}-{(key // 100 + 1) % 100:02d} GW{key % 100}" if key >= 100 else f"GW{key}"
+
+    train_end_idx = len(distinct_rounds) - n_val_rounds - 1
+    train_range   = _fmt(distinct_rounds[train_end_idx]) if train_end_idx >= 0 else "(none)"
     logger.info(
-        f"Temporal split: train GW1-{val_start - 1} ({len(train_df):,} rows) | "
-        f"val GW{val_start}-{max_gw} ({len(val_df):,} rows)"
+        f"Temporal split: train {len(train_df):,} rows (up to {train_range}) | "
+        f"val {len(val_df):,} rows ({_fmt(val_start_key)} to {_fmt(distinct_rounds[-1])})"
     )
     return train_df, val_df
 

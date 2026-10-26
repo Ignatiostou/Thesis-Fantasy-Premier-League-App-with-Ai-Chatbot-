@@ -9,7 +9,7 @@ import { League } from "@/lib/types";
 // ── Shared modal styles ───────────────────────────────────────────────────────
 
 const labelStyle: React.CSSProperties = {
-  display: "block", color: "rgba(255,255,255,.35)", fontSize: 9, fontWeight: 700,
+  display: "block", color: "rgba(255,255,255,.7)", fontSize: 10, fontWeight: 700,
   letterSpacing: ".18em", textTransform: "uppercase",
   fontFamily: "'Barlow',sans-serif", marginBottom: 5,
 };
@@ -31,7 +31,7 @@ const primaryBtnStyle: React.CSSProperties = {
 const secondaryBtnStyle: React.CSSProperties = {
   padding: "10px 16px", borderRadius: 9,
   border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)",
-  color: "rgba(255,255,255,.45)", fontFamily: "'Barlow Condensed',sans-serif",
+  color: "rgba(255,255,255,.78)", fontFamily: "'Barlow Condensed',sans-serif",
   fontWeight: 700, fontSize: 12, letterSpacing: ".1em",
   textTransform: "uppercase", cursor: "pointer",
 };
@@ -99,7 +99,7 @@ export function CreateLeagueModal({ onClose, onCreate }: CreateProps) {
       {err && <ErrBanner msg={err} />}
       <label style={labelStyle}>League Name</label>
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Hawk United League" style={inputStyle} maxLength={40} />
-      <p style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontFamily: "'Barlow',sans-serif", margin: "0 0 16px" }}>
+      <p style={{ color: "rgba(255,255,255,.58)", fontSize: 11, fontFamily: "'Barlow',sans-serif", margin: "0 0 16px" }}>
         Classic format (cumulative points). Invite friends with the code after creating.
       </p>
       <div style={{ display: "flex", gap: 8 }}>
@@ -147,7 +147,7 @@ export function JoinLeagueModal({ onClose, onJoin }: JoinProps) {
       {err && <ErrBanner msg={err} />}
       <label style={labelStyle}>Invite Code</label>
       <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. ABCD1234" style={inputStyle} maxLength={12} />
-      <p style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontFamily: "'Barlow',sans-serif", margin: "0 0 16px" }}>
+      <p style={{ color: "rgba(255,255,255,.58)", fontSize: 11, fontFamily: "'Barlow',sans-serif", margin: "0 0 16px" }}>
         Ask the league admin for the invite code.
       </p>
       <div style={{ display: "flex", gap: 8 }}>

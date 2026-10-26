@@ -27,6 +27,8 @@ SQUAD_SIZE                = 15
 POSITION_QUOTAS           = {1: 2, 2: 5, 3: 5, 4: 3}   # GK=2, DEF=5, MID=5, FWD=3
 BUDGET_TENTHS             = 1000                        # £100.0m
 MAX_PLAYERS_PER_CLUB      = 3
+POSITION_LABEL            = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
+DEFAULT_POOL_SIZE         = 30
 
 # Solver timeout — small problems should solve in <1s; if it takes more than
 # 30s something is wrong with the inputs.
@@ -42,6 +44,7 @@ WITH latest_pred AS (
         player_id,
         gameweek,
         predicted_pts_gw1,
+        predicted_pts_if_starts,
         predicted_pts_gw3,
         predicted_pts_gw5,
         prob_playing,
@@ -63,6 +66,7 @@ SELECT
     p."chanceOfPlayingNextRound"  AS chance_of_playing,
     lp.gameweek                   AS pred_gw,
     lp.predicted_pts_gw1,
+    lp.predicted_pts_if_starts,
     lp.predicted_pts_gw3,
     lp.predicted_pts_gw5,
     lp.prob_playing,
@@ -85,8 +89,8 @@ SELECT
     "riskTolerance", "budgetStyle", "preferredFocus",
     "differentialPreference", "planningHorizon", "explanationDepth",
     notes
-FROM user_assistant_profiles
-WHERE "userId" = %(uid)s
+FROM "UserAssistantProfile"
+WHERE "userId" = :uid
 """
 
 DEFAULT_WEIGHTS = {
@@ -124,9 +128,12 @@ def derive_squad_weights(profile_row: pd.Series | None) -> dict:
     rt = int(profile_row.get("riskTolerance", 2) or 2)
     w["availability_exponent"] = {1: 1.5, 2: 1.0, 3: 0.7}[rt]
 
-    # differentialPreference
+    # differentialPreference — was {0.0, 0.05, 0.20}, too small next to a base
+    # objective that's usually 2-8+: even the top tier barely nudged low-owned
+    # players above template picks. Widened so a real preference for
+    # differentials visibly changes which players the ILP picks.
     dp = int(profile_row.get("differentialPreference", 2) or 2)
-    w["differential_bonus"] = {1: 0.0, 2: 0.05, 3: 0.20}[dp]
+    w["differential_bonus"] = {1: 0.0, 2: 0.15, 3: 0.50}[dp]
 
     # budgetStyle
     bs = int(profile_row.get("budgetStyle", 2) or 2)
@@ -156,15 +163,30 @@ def compute_objective(row: pd.Series, w: dict) -> float:
     if pd.isna(row["predicted_pts_gw5"]):
         return 0.0
 
-    # Horizon-weighted xPts — GW1 is per-GW (×5 to compare to GW5 total)
+    prob_play = row["prob_playing"] if row["prob_playing"] is not None else 0.5
+    prob_play = max(0.05, float(prob_play))
+
+    # Horizon-weighted xPts — GW1 is per-GW (×5 to compare to GW5 total).
+    #
+    # Built from the CONDITIONAL projection (points if he appears), because the
+    # availability term below already prices appearance risk. predicted_pts_gw1
+    # and _gw5 are unconditional — using them here multiplied availability in
+    # twice, systematically penalising rotation risks beyond their true cost.
+    # The gw5 projection is linear in gw1, so dividing by prob_playing recovers
+    # its conditional counterpart exactly.
+    cond_gw1 = row.get("predicted_pts_if_starts")
+    if cond_gw1 is None or pd.isna(cond_gw1):
+        cond_gw1 = (row["predicted_pts_gw1"] or 0) / prob_play
+    cond_gw5 = (row["predicted_pts_gw5"] or 0) / prob_play
+
     horizon = (
-        (row["predicted_pts_gw1"] or 0) * 5.0 * w["gw1_weight"]
-        + (row["predicted_pts_gw5"] or 0) * w["gw5_weight"]
+        float(cond_gw1) * 5.0 * w["gw1_weight"]
+        + float(cond_gw5) * w["gw5_weight"]
     )
 
-    # Availability shaping
-    prob_play = row["prob_playing"] if row["prob_playing"] is not None else 0.5
-    avail = max(0.20, float(prob_play)) ** w["availability_exponent"]
+    # Availability shaping. Exponent 1.0 reproduces the true expectation;
+    # below 1 tolerates rotation risk, above 1 penalises it.
+    avail = max(0.20, prob_play) ** w["availability_exponent"]
 
     # Confidence discount
     confidence = (row["confidence"] or "MEDIUM")
@@ -191,6 +213,76 @@ def compute_objective(row: pd.Series, w: dict) -> float:
     return float(base * big_six_mul * premium_factor + diff_bonus)
 
 
+# ── Candidate pool (browsable shortlist, not a purchasable squad) ─────────────
+
+# xPts (predicted_pts_gw5) gap treated as "close enough to not matter" when
+# filling pool slots. A fixed top-N cutoff means the same weights always
+# surface the exact same names — anyone within this band of the cutoff is
+# "contested" and gets randomly shuffled in/out instead, so e.g. a 26th-
+# ranked player half a point behind the 11th can surface sometimes.
+NEAR_TIE_EPSILON_PTS = 0.5
+
+
+def _select_position_with_variety(pos_candidates: pd.DataFrame, count: int) -> pd.DataFrame:
+    ranked = pos_candidates.sort_values("obj_value", ascending=False).reset_index(drop=True)
+    if len(ranked) <= count:
+        return ranked
+
+    boundary_pts = ranked.loc[count - 1, "predicted_pts_gw5"]
+    contested_mask = (ranked["predicted_pts_gw5"] - boundary_pts).abs() <= NEAR_TIE_EPSILON_PTS
+    locked_in = ranked[~contested_mask & (ranked.index < count)]
+    contested = ranked[contested_mask]
+
+    slots_left = count - len(locked_in)
+    if slots_left <= 0 or contested.empty:
+        return ranked.head(count)
+
+    chosen = contested.sample(n=min(slots_left, len(contested)))
+    return pd.concat([locked_in, chosen])
+
+
+def build_candidate_pool(candidates: pd.DataFrame, pool_size: int) -> list[dict]:
+    """Top-`pool_size` candidates ranked by objective value, split across
+    positions in the same 2:5:5:3 (GK:DEF:MID:FWD) ratio as a real squad.
+
+    This is NOT a second squad — no budget or per-club constraint — just a
+    wider ranked shortlist so the user can see more than the one ILP-optimal
+    15 and pick alternatives themselves (or ask for a bigger/smaller list).
+    Near-boundary picks per position are randomised (see
+    _select_position_with_variety) so repeat requests aren't the same list.
+    """
+    total_quota = sum(POSITION_QUOTAS.values())  # 15
+
+    # Largest-remainder allocation so per-position counts sum to pool_size exactly.
+    raw = {pos: pool_size * quota / total_quota for pos, quota in POSITION_QUOTAS.items()}
+    counts = {pos: int(n) for pos, n in raw.items()}
+    remainder = pool_size - sum(counts.values())
+    remainders = sorted(raw.items(), key=lambda kv: kv[1] - int(kv[1]), reverse=True)
+    for pos, _ in remainders[:remainder]:
+        counts[pos] += 1
+
+    pool: list[dict] = []
+    for pos, count in counts.items():
+        pos_candidates = candidates[candidates["position"] == pos]
+        top = _select_position_with_variety(pos_candidates, count)
+        for _, row in top.iterrows():
+            pool.append({
+                "player_id":         int(row["player_id"]),
+                "web_name":          row["web_name"],
+                "position":          POSITION_LABEL[pos],
+                "team":              row["team_short_name"],
+                "cost":              int(row["now_cost"]) / 10.0,
+                "predicted_pts_gw1": float(row["predicted_pts_gw1"] or 0),
+                "predicted_pts_gw5": float(row["predicted_pts_gw5"] or 0),
+                "prob_playing":      float(row["prob_playing"] or 0),
+                "confidence":        row["confidence"],
+                "ownership_percent": float(row["selected_by_percent"] or 0),
+                "objective_value":   float(row["obj_value"]),
+            })
+    pool.sort(key=lambda p: (p["position"], -p["objective_value"]))
+    return pool
+
+
 # ── Main optimiser ────────────────────────────────────────────────────────────
 
 def optimize_squad(
@@ -198,6 +290,7 @@ def optimize_squad(
     budget_tenths: int = BUDGET_TENTHS,
     forced_in_ids: list[int] | None = None,
     forced_out_ids: list[int] | None = None,
+    pool_size: int = DEFAULT_POOL_SIZE,
 ) -> dict:
     """
     Solve the ILP and return:
@@ -291,7 +384,6 @@ def optimize_squad(
     chosen_indices = [idx for idx in candidates.index if x[idx].value() == 1]
     chosen_df = candidates.loc[chosen_indices].copy().sort_values(["position", "obj_value"], ascending=[True, False])
 
-    POSITION_LABEL = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
     squad = []
     for _, row in chosen_df.iterrows():
         squad.append({
@@ -309,6 +401,7 @@ def optimize_squad(
         })
 
     total_cost = sum(p["cost"] for p in squad)
+    pool = build_candidate_pool(candidates, max(pool_size, SQUAD_SIZE))
 
     return {
         "status":          "OPTIMAL",
@@ -318,6 +411,8 @@ def optimize_squad(
         "budget_left":     round(100.0 - total_cost, 1),
         "weights":         weights,
         "candidate_count": int(len(candidates)),
+        "pool":            pool,
+        "pool_size":       len(pool),
     }
 
 
@@ -327,12 +422,14 @@ def main() -> None:
     parser.add_argument("--budget", type=int, default=BUDGET_TENTHS, help="Budget in tenths (default 1000 = £100.0m)")
     parser.add_argument("--force-in",  type=int, nargs="*", default=[], help="Player IDs that MUST be in the squad")
     parser.add_argument("--force-out", type=int, nargs="*", default=[], help="Player IDs that must NOT be in the squad")
+    parser.add_argument("--pool-size", type=int, default=DEFAULT_POOL_SIZE, help="Size of the ranked candidate shortlist to return alongside the optimal squad")
     parser.add_argument("--json-out", action="store_true", help="Print result as JSON (for TS spawn integration)")
     args = parser.parse_args()
 
     result = optimize_squad(
         user_id=args.user_id,
         budget_tenths=args.budget,
+        pool_size=args.pool_size,
         forced_in_ids=args.force_in,
         forced_out_ids=args.force_out,
     )

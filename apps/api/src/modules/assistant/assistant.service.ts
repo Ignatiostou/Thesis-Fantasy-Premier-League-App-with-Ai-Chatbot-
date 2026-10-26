@@ -11,8 +11,13 @@ import {
   getRecentHistory,
 }                                          from './assistant.memory.service.js';
 import { generateReply, generateReplyStream } from './assistant.llm.service.js';
-import { detectAssistantIntent }           from './assistant.intent.service.js';
+import {
+  detectAssistantIntent,
+  isFplRelated,
+  OUT_OF_SCOPE_REPLY,
+} from './assistant.intent.service.js';
 import { buildRecommendationContext }      from './recommendation.service.js';
+import { findMentionedPlayers }            from './player-search.service.js';
 // IMPROVEMENT #10: shared constant instead of a locally-duplicated `2000` literal.
 
 
@@ -54,6 +59,22 @@ async function prepareChat(userId: string, input: SendMessageInput) {
 
   await saveUserMessage(sessionId, message.trim());
 
+  // Deterministic scope gate — see isFplRelated(). Refusing here, before the
+  // recommendation pipeline and the LLM call, means an off-topic message costs
+  // nothing and the refusal is identical every time.
+  //
+  // isFplRelated() is pure keyword matching, so a message that's ONLY player
+  // names ("Saka? Gabriel? Havertz?") — no captain/transfer/squad vocabulary
+  // at all — scores zero and looks off-topic even though naming real
+  // footballers is exactly what an FPL coach should field. Only run this
+  // (DB-backed) fallback when the cheap keyword check already failed.
+  if (!isFplRelated(message)) {
+    const mentioned = await findMentionedPlayers(message, 1);
+    if (mentioned.length === 0) {
+      return { sessionId, outOfScope: true as const, trimmedMessage: message.trim() };
+    }
+  }
+
   const history  = await getRecentHistory(sessionId);
   const intent   = detectAssistantIntent(message);
   const userCtx  = await buildUserContext(userId);
@@ -76,6 +97,7 @@ async function prepareChat(userId: string, input: SendMessageInput) {
 
   return {
     sessionId,
+    outOfScope: false as const,
     intent,
     userCtx,
     trimmedMessage: message.trim(),
@@ -88,10 +110,23 @@ async function prepareChat(userId: string, input: SendMessageInput) {
 // ── Non-streaming chat ────────────────────────────────────────────────────────
 
 export async function sendMessage(input: SendMessageInput): Promise<ChatResult> {
+  const prepared = await prepareChat(input.userId, input);
+
+  if (prepared.outOfScope) {
+    const refused = await saveAssistantMessage(prepared.sessionId, OUT_OF_SCOPE_REPLY);
+    return {
+      sessionId: prepared.sessionId,
+      messageId: refused.id,
+      reply:     OUT_OF_SCOPE_REPLY,
+      role:      'assistant',
+      createdAt: refused.createdAt.toISOString(),
+    };
+  }
+
   const {
     sessionId, intent, trimmedMessage,
     systemPrompt, formattedHistory, recommendation,
-  } = await prepareChat(input.userId, input);
+  } = prepared;
 
   const replyText = await generateReply({
     systemPrompt,
@@ -134,16 +169,42 @@ export async function sendMessage(input: SendMessageInput): Promise<ChatResult> 
 
 
 export type ChatStreamEvent =
-  | { kind: 'meta';  primarySource: 'ML' | 'HEURISTIC' | 'ML_ONLY' | 'HEURISTIC_ONLY'; reason: string }
-  | { kind: 'delta'; text: string };
+  | { kind: 'meta';   primarySource: 'ML' | 'HEURISTIC' | 'ML_ONLY' | 'HEURISTIC_ONLY'; reason: string }
+  | { kind: 'status'; message: string }
+  | { kind: 'delta';  text: string };
 
 export async function* sendMessageStream(
   input: SendMessageInput,
 ): AsyncGenerator<ChatStreamEvent> {
+  // Cheap pre-check, before the (possibly slow) prepareChat/buildRecommendationContext
+  // call below: INITIAL_SQUAD for a user with no team yet routes to the ILP squad
+  // optimizer (spawns Python, can take up to ~60s). Warn the frontend so it can
+  // show something more informative than a plain "thinking" spinner for a minute.
+  if (detectAssistantIntent(input.message) === 'INITIAL_SQUAD') {
+    const team = await prisma.userTeam.findUnique({
+      where:  { userId: input.userId },
+      select: { id: true },
+    });
+    if (!team) {
+      yield {
+        kind: 'status',
+        message: 'Building your initial squad with the ML optimizer — this can take up to a minute…',
+      };
+    }
+  }
+
+  const prepared = await prepareChat(input.userId, input);
+
+  if (prepared.outOfScope) {
+    yield { kind: 'delta', text: OUT_OF_SCOPE_REPLY };
+    await saveAssistantMessage(prepared.sessionId, OUT_OF_SCOPE_REPLY);
+    return;
+  }
+
   const {
     sessionId, intent, trimmedMessage,
     systemPrompt, formattedHistory, recommendation,
-  } = await prepareChat(input.userId, input);
+  } = prepared;
 
   if (recommendation?.conflictResolution) {
     yield {

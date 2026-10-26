@@ -22,7 +22,15 @@ CRITICAL for captaincy:
 - "season pts" in the squad data is the WHOLE SEASON CUMULATIVE TOTAL (100-200 range)
   — do NOT use it to judge current form. Use "form" (last 30 days) instead
 - Do NOT name captain options not in the computed data or squad
-- Only recommend players who are currently active in the Premier League`;
+- Only recommend players who are currently active in the Premier League
+
+If both a rule-based CAPTAINCY ANALYSIS and ML CAPTAIN RANKINGS/DATA are present
+and they conflict on the top pick, do not silently pick one — surface the
+conflict to the manager: name the ML top pick and the rule-based top pick,
+explain briefly why they differ (e.g. ML weighs raw scoring potential; the
+rule-based score also weighs fixture difficulty, team defensive stats, and
+availability risk flags), and give your own recommendation between the two
+rather than just restating both numbers.`;
 
     case 'TRANSFER_ADVICE':
     case 'TRANSFER_EVALUATION':

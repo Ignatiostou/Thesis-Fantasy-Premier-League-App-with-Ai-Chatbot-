@@ -11,14 +11,29 @@ vi.mock('../../../utils/gameweek.js', () => ({
 }));
 
 vi.mock('../player-search.service.js', () => ({
-  findMentionedPlayers: vi.fn(),
+  findMentionedPlayersDetailed: vi.fn(),
+}));
+
+// evaluateMentionedTransfer does its own STRICT eligibility re-check on the
+// incoming player (on top of whatever findMentionedPlayersDetailed already
+// filtered) — mock it out so these tests exercise transfer-evaluator's own
+// logic, not player-eligibility's DB queries. Defaults to "eligible" so
+// existing tests (none of which target this recheck specifically) are
+// unaffected; buildEligibilitySnapshots' Map lookup just needs a defined Map.
+vi.mock('../player-eligibility.service.js', () => ({
+  buildEligibilitySnapshots: vi.fn().mockResolvedValue(new Map()),
+  checkEligibility: vi.fn().mockReturnValue({ eligible: true, reasons: [] }),
 }));
 
 import { prisma } from '../../../db/prisma.js';
-import { findMentionedPlayers } from '../player-search.service.js';
+import { findMentionedPlayersDetailed } from '../player-search.service.js';
 import { evaluateMentionedTransfer } from '../transfer-evaluator.service.js';
 
 const mock = prisma as any;
+
+function mockFound(players: any[]) {
+  vi.mocked(findMentionedPlayersDetailed).mockResolvedValue({ players, excluded: [] });
+}
 
 function makeTeamWithPicks(budget = 50, picks: any[] = []) {
   return { id: 'team_1', budget, picks };
@@ -81,7 +96,7 @@ describe('evaluateMentionedTransfer', () => {
 
   it('returns detected:false when user has no team', async () => {
     mock.userTeam.findUnique.mockResolvedValue(null);
-    vi.mocked(findMentionedPlayers).mockResolvedValue([]);
+    mockFound([]);
     const result = await evaluateMentionedTransfer('user_1', 'transfer');
     expect(result.detected).toBe(false);
     expect(result.recommendation).toContain('No team found');
@@ -91,7 +106,7 @@ describe('evaluateMentionedTransfer', () => {
 
   it('returns detected:false when no players found in message', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, SQUAD));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([]);
+    mockFound([]);
     const result = await evaluateMentionedTransfer('user_1', 'what transfers should i make');
     expect(result.detected).toBe(false);
     expect(result.recommendation).toContain('could not confidently detect');
@@ -99,14 +114,14 @@ describe('evaluateMentionedTransfer', () => {
 
   it('returns detected:false when both mentioned players are in the squad', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, SQUAD));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([makePlayer(1), makePlayer(3)]);
+    mockFound([makePlayer(1), makePlayer(3)]);
     const result = await evaluateMentionedTransfer('user_1', 'p1 vs p3');
     expect(result.detected).toBe(false);
   });
 
   it('returns detected:false when both mentioned players are NOT in squad', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, SQUAD));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([makePlayer(99), makePlayer(98)]);
+    mockFound([makePlayer(99), makePlayer(98)]);
     const result = await evaluateMentionedTransfer('user_1', 'p99 for p98');
     expect(result.detected).toBe(false);
   });
@@ -115,7 +130,7 @@ describe('evaluateMentionedTransfer', () => {
 
   it('correctly identifies outgoing (in squad) and incoming (not in squad)', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, SQUAD));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([makePlayer(1), makePlayer(99)]);
+    mockFound([makePlayer(1), makePlayer(99)]);
     const result = await evaluateMentionedTransfer('user_1', 'transfer p1 for p99');
     expect(result.detected).toBe(true);
     expect(result.outgoingPlayer?.playerId).toBe(1);
@@ -126,21 +141,21 @@ describe('evaluateMentionedTransfer', () => {
 
   it('calculates sell price correctly when price has not risen', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, [makePick(1, 10, 75)]));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([makePlayer(1, { nowCost: 70 }), makePlayer(99)]);
+    mockFound([makePlayer(1, { nowCost: 70 }), makePlayer(99)]);
     const result = await evaluateMentionedTransfer('user_1', 'transfer');
     expect(result.outgoingPlayer?.sellPrice).toBe(70);
   });
 
   it('gives half profit on price rise (buy 75 → now 79 → sell 77)', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, [makePick(1, 10, 75)]));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([makePlayer(1, { nowCost: 79 }), makePlayer(99, { nowCost: 80 })]);
+    mockFound([makePlayer(1, { nowCost: 79 }), makePlayer(99, { nowCost: 80 })]);
     const result = await evaluateMentionedTransfer('user_1', 'transfer');
     expect(result.outgoingPlayer?.sellPrice).toBe(77);
   });
 
   it('floors profit on odd rise (buy 75 → now 78 → sell 76)', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, [makePick(1, 10, 75)]));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([makePlayer(1, { nowCost: 78 }), makePlayer(99, { nowCost: 80 })]);
+    mockFound([makePlayer(1, { nowCost: 78 }), makePlayer(99, { nowCost: 80 })]);
     const result = await evaluateMentionedTransfer('user_1', 'transfer');
     expect(result.outgoingPlayer?.sellPrice).toBe(76);
   });
@@ -150,7 +165,7 @@ describe('evaluateMentionedTransfer', () => {
   it('marks transfer as affordable when bank covers cost', async () => {
     // bank=50, sell=75 (no rise), buy=100 → bankAfter = 50+75-100 = 25
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, [makePick(1, 10, 75)]));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([makePlayer(1, { nowCost: 75 }), makePlayer(99, { nowCost: 100 })]);
+    mockFound([makePlayer(1, { nowCost: 75 }), makePlayer(99, { nowCost: 100 })]);
     const result = await evaluateMentionedTransfer('user_1', 'transfer');
     expect(result.budgetImpact?.affordable).toBe(true);
     expect(result.budgetImpact?.bankAfter).toBe(25);
@@ -159,7 +174,7 @@ describe('evaluateMentionedTransfer', () => {
   it('marks transfer as NOT affordable when cost exceeds bank', async () => {
     // bank=10, sell=75, buy=100 → bankAfter = -15
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(10, [makePick(1, 10, 75)]));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([makePlayer(1, { nowCost: 75 }), makePlayer(99, { nowCost: 100 })]);
+    mockFound([makePlayer(1, { nowCost: 75 }), makePlayer(99, { nowCost: 100 })]);
     const result = await evaluateMentionedTransfer('user_1', 'transfer');
     expect(result.budgetImpact?.affordable).toBe(false);
     expect(result.risks).toContain('not affordable with current bank');
@@ -169,7 +184,7 @@ describe('evaluateMentionedTransfer', () => {
 
   it('flags position mismatch in risks', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, [makePick(1, 10, 75)]));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { position: 3, nowCost: 75 }),
       makePlayer(99, { position: 4, nowCost: 75 }), // FWD not MID
     ]);
@@ -180,7 +195,7 @@ describe('evaluateMentionedTransfer', () => {
 
   it('passes position check when positions match', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, [makePick(1, 10, 75)]));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { position: 3, nowCost: 75 }),
       makePlayer(99, { position: 3, nowCost: 75 }),
     ]);
@@ -208,7 +223,7 @@ describe('evaluateMentionedTransfer', () => {
 
   mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(100, picks));
 
-  vi.mocked(findMentionedPlayers).mockResolvedValue([
+  mockFound([
     makePlayer(1, { teamId: 10, nowCost: 75 }),
     makePlayer(99, { teamId: 10, nowCost: 75 }),
   ]);
@@ -223,7 +238,7 @@ describe('evaluateMentionedTransfer', () => {
 
   it('flags availability risk when incoming player has < 75% chance', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, [makePick(1, 10, 75)]));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { nowCost: 75 }),
       makePlayer(99, { nowCost: 75, chance: 50 }),
     ]);
@@ -233,7 +248,7 @@ describe('evaluateMentionedTransfer', () => {
 
   it('flags status risk when incoming player is not available', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, [makePick(1, 10, 75)]));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { nowCost: 75 }),
       makePlayer(99, { nowCost: 75, status: 'd' }),
     ]);
@@ -245,7 +260,7 @@ describe('evaluateMentionedTransfer', () => {
 
   it('returns positive recommendation for valid affordable same-position transfer', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(50, [makePick(1, 10, 75)]));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { position: 3, nowCost: 75 }),
       makePlayer(99, { position: 3, nowCost: 80 }),
     ]);
@@ -255,7 +270,7 @@ describe('evaluateMentionedTransfer', () => {
 
   it('returns cautious recommendation when transfer has structural issues', async () => {
     mock.userTeam.findUnique.mockResolvedValue(makeTeamWithPicks(5, [makePick(1, 10, 75)]));
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { position: 3, nowCost: 75 }),
       makePlayer(99, { position: 4, nowCost: 100 }), // wrong pos + unaffordable
     ]);

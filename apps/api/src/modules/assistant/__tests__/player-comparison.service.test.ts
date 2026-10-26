@@ -3,10 +3,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../player-search.service.js', () => ({
-  findMentionedPlayers: vi.fn(),
+  findMentionedPlayersDetailed: vi.fn(),
 }));
 
-import { findMentionedPlayers } from '../player-search.service.js';
+import { findMentionedPlayersDetailed } from '../player-search.service.js';
 import { compareMentionedPlayers } from '../player-comparison.service.js';
 
 function makePlayer(id: number, overrides: any = {}): any {
@@ -28,23 +28,28 @@ function makePlayer(id: number, overrides: any = {}): any {
   };
 }
 
+function mockFound(players: any[]) {
+  vi.mocked(findMentionedPlayersDetailed).mockResolvedValue({ players, excluded: [] });
+}
+
 describe('compareMentionedPlayers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('returns found:false when fewer than 2 players identified', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([makePlayer(1)]);
+  it('returns a single-player profile (found:true, 1 player) when exactly one player is identified', async () => {
+    mockFound([makePlayer(1, { webName: 'Salah' })]);
 
     const result = await compareMentionedPlayers('salah');
 
-    expect(result.found).toBe(false);
-    expect(result.players).toHaveLength(0);
-    expect(result.recommendation).toContain('could not confidently identify');
+    expect(result.found).toBe(true);
+    expect(result.players).toHaveLength(1);
+    expect(result.players[0].webName).toBe('Salah');
+    expect(result.recommendation).toContain('Salah');
   });
 
   it('returns found:false when no players identified', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([]);
+    mockFound([]);
 
     const result = await compareMentionedPlayers('compare players');
 
@@ -52,7 +57,7 @@ describe('compareMentionedPlayers', () => {
   });
 
   it('returns found:true with exactly 2 players when more are found', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1),
       makePlayer(2),
       makePlayer(3),
@@ -67,7 +72,7 @@ describe('compareMentionedPlayers', () => {
   // ── Pros generation ──────────────────────────────────────────────────────────
 
   it('adds strong season output pro when totalPoints >= 100', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { totalPoints: 120 }),
       makePlayer(2, { totalPoints: 50 }),
     ]);
@@ -79,7 +84,7 @@ describe('compareMentionedPlayers', () => {
   });
 
   it('adds excellent form pro when form >= 5', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { form: 7.5 }),
       makePlayer(2, { form: 3.0 }),
     ]);
@@ -91,7 +96,7 @@ describe('compareMentionedPlayers', () => {
   });
 
   it('adds good availability pro when chanceOfPlayingNextRound >= 75', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { chance: 100 }),
       makePlayer(2, { chance: 50 }),
     ]);
@@ -105,7 +110,7 @@ describe('compareMentionedPlayers', () => {
   // ── Cons generation ──────────────────────────────────────────────────────────
 
   it('adds availability con when chance < 75', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { chance: 50 }),
       makePlayer(2),
     ]);
@@ -116,7 +121,7 @@ describe('compareMentionedPlayers', () => {
   });
 
   it('adds status con when player is not available', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { status: 'd' }),
       makePlayer(2),
     ]);
@@ -127,7 +132,7 @@ describe('compareMentionedPlayers', () => {
   });
 
   it('adds weak season con when totalPoints < 40', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { totalPoints: 20 }),
       makePlayer(2, { totalPoints: 80 }),
     ]);
@@ -141,7 +146,7 @@ describe('compareMentionedPlayers', () => {
   // ── Composite scoring ────────────────────────────────────────────────────────
 
   it('recommends the higher-scoring player', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, {
         webName: 'Salah',
         totalPoints: 150,
@@ -164,7 +169,7 @@ describe('compareMentionedPlayers', () => {
   });
 
   it('penalises unavailable status in composite score', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, {
         webName: 'Available',
         totalPoints: 80,
@@ -187,7 +192,7 @@ describe('compareMentionedPlayers', () => {
   // ── safeForm edge cases ──────────────────────────────────────────────────────
 
   it('handles string form values gracefully', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { form: '6.5' }),
       makePlayer(2, { form: '3.0' }),
     ]);
@@ -199,7 +204,7 @@ describe('compareMentionedPlayers', () => {
   });
 
   it('handles null/undefined form gracefully', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1, { form: null }),
       makePlayer(2, { form: undefined }),
     ]);
@@ -214,7 +219,7 @@ describe('compareMentionedPlayers', () => {
   // ── Output shape ─────────────────────────────────────────────────────────────
 
   it('each player has required fields', async () => {
-    vi.mocked(findMentionedPlayers).mockResolvedValue([
+    mockFound([
       makePlayer(1),
       makePlayer(2),
     ]);
