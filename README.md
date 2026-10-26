@@ -17,24 +17,7 @@ A full-stack Fantasy Premier League management app with an AI coaching assistant
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    User[Browser] --> Web[Next.js / React frontend]
-    Web -->|HTTP + auth cookies| API[Express / TypeScript API]
-    API --> Auth[Authentication and game rules]
-    API --> Coach[Assistant routing and squad intelligence]
-    Coach --> LLM[Anthropic or OpenAI]
-    API --> Prisma[Prisma ORM]
-    Prisma --> DB[(PostgreSQL 16)]
-    FPL[Official FPL API] --> Sync[Scheduled data synchronisation]
-    Sync --> DB
-    API --> Jobs[Scoring and ML schedulers]
-    Jobs -->|Python subprocess| ML[Data extraction / features / training / inference]
-    DB --> ML
-    ML -->|Predictions via SQLAlchemy| DB
-    ML --> Models[Local model artifacts]
-    DB --> Coach
-```
+![System architecture showing the frontend, REST API, AI assistant, schedulers, PostgreSQL, ML pipeline, and external services](docs/images/system-architecture.png)
 
 The frontend presents the manager UI and chatbot. The API owns authentication, team state, transfer and chip rules, scoring, leagues, and assistant orchestration. Prisma manages the application database schema. The assistant combines application context and prediction services with an optional LLM provider to explain recommendations.
 
