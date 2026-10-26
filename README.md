@@ -35,7 +35,11 @@ The Python pipeline extracts player-gameweek history, builds lagged and rolling 
 | `infra` | Docker Compose database configuration |
 | `docs/images` | README screenshots |
 
-Thesis documents, evaluation outputs, datasets, model binaries, environment secrets, build outputs, and laptop-sync duplicates are excluded from the source update. Evaluation scripts and tests are included for reproducibility.
+Evaluation outputs, datasets, model binaries, environment secrets, build outputs, and laptop-sync duplicates are excluded from the source update. Evaluation scripts and tests are included for reproducibility.
+
+## Thesis
+
+[Σχεδίαση και Ανάπτυξη προσωποποιημένης (PDF)](docs/thesis/Σχεδίαση%20και%20Ανάπτυξη%20προσωποποιημένης.pdf)
 
 ## Run locally
 
